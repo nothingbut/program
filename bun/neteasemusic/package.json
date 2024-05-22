@@ -1,0 +1,15 @@
+{
+  "name": "neteasemusic",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "netease-cloud-music": "^1.0.3",
+    "node-id3": "^0.2.6"
+  }
+}

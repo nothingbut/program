@@ -1,2 +1,1 @@
-# program
-personal codebase
+only for personal learning

@@ -1,0 +1,16 @@
+bookshelf:
+  -:
+    uuid: $uuid$
+    title: $title$
+    author: $author$
+    intro: $intro$
+    type: <text|folder>
+    source: $source$
+    cover: $coverfile$
+    tags: [novel, text]
+
+toc:
+  -:
+    subject: $subject$
+    from: $number$
+    end: $line$
