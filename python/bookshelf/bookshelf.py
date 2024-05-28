@@ -4,10 +4,10 @@ from PySide6.QtGui import QAction, QCursor
 from PySide6.QtCore import Qt, QAbstractTableModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from bookproperties import BookProperties
+from bsconfig import BookShelfConfig
 
-template = '/Users/shichang/Workspace/programing/data/template.html'
-cssfile = '/Users/shichang/Workspace/programing/data/epub.css'
-targettemp = '/Users/shichang/Workspace/programing/data/%s.epub'
+cssfile = '/Users/shichang/Workspace/program/data/epub.css'
+targettemp = '/Users/shichang/Workspace/program/data/%s.epub'
 
 class TOCModel(QAbstractTableModel):
     def __init__(self, parent, chaptersList, *args):
@@ -42,9 +42,12 @@ class TOCModel(QAbstractTableModel):
 class BookshelfWnd(QMainWindow):
     def __init__(self,parent=None):
         super(BookshelfWnd, self).__init__(parent)
+        self.initConfig()
         self.initModel()
         self.initUI(parent)
 
+    def initConfig(self):
+        self.config = BookShelfConfig()
     def initModel(self):
         self.chapterList = [('','','','','','')]
         self.tocModel = TOCModel(self, self.chapterList)
@@ -151,10 +154,10 @@ class BookshelfWnd(QMainWindow):
         self.book = bookData
         self.preloadContent()
     def generateChapter(self, chapter):
-        curcontent = '<h2 id=\"title\">%s</h2>' % chapter[0]
+        curcontent = ['<h2 id=\"title\">%s</h2>' % chapter[0]]
         for idx in range(chapter[3], chapter[3] + chapter[4]):
-            curcontent += '<p>%s</p>' % self.lines[idx].strip()
-        return curcontent
+            curcontent.append('<p>%s</p>' % self.lines[idx].strip())
+        return ''.join(curcontent)
 
     def preloadContent(self):
         with open(self.book['source'],'r', encoding="utf-8") as fp:
@@ -165,9 +168,10 @@ class BookshelfWnd(QMainWindow):
         with open(self.book['cover'], 'rb') as file:
             book.set_cover(file.read())
 
-        with open(cssfile) as file:
+        with open(self.config.getCSSFile()) as file:
             book.set_stylesheet(file.read())
 
+        volpage = None
         for chapter in self.chapterList:
             if chapter[1] == 'delete':
                 continue
@@ -176,12 +180,9 @@ class BookshelfWnd(QMainWindow):
             if chapter[1] == 'volumn':
                 volpage = book.add_page(chapter[0], curcontent)
                 continue
-            if volpage is None:
-                book.add_page(chapter[0], curcontent)
-            else:
-                book.add_page(chapter[0], curcontent, volpage)
+            book.add_page(chapter[0], curcontent, volpage)
 
-        targetfile = targettemp % book.title
+        targetfile = self.config.getTargetFile() % book.title
         book.save(targetfile)
 
     def showChapterContent(self):

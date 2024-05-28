@@ -84,7 +84,7 @@ class BookProperties(QWidget):
 
     def initTagComboBox(self):
         self.allTags = []
-        with open('/Users/shichang/Workspace/programing/data/tags.json','r') as fp:
+        with open('/Users/shichang/Workspace/program/data/tags.json','r') as fp:
             self.allTags = json.load(fp)
 
         self.parentTag.addItem('--')
@@ -112,32 +112,43 @@ class BookProperties(QWidget):
     def genDefaultCover(self):
         pass
 
+    def queryByName(self, name):
+        with sqlite3.connect('/Users/shichang/Downloads/temp/yousuu.db') as conn:
+            cur = conn.cursor()
+            querystr = 'select id, title, author, desc, cover, tags from main.book_info where title = \'%s\'' % self.titleEdit.text()
+            try:
+                cur.execute(querystr)
+                for row in cur:
+                    return {
+                        'id': row[0],
+                        'title': row[1],
+                        'author': row[2],
+                        'desc': row[3],
+                        'cover': row[4],
+                        'tags': row[5]
+                    }
+            except:
+                return None
+
     def autofillInfo(self):
-        conn = sqlite3.connect('/Users/shichang/Workspace/programing/data/yousuu.db')
-        cur = conn.cursor()
-        querystr = 'select id, title, author, desc, cover, tags from main.book_info where title = \'%s\'' % self.titleEdit.text()
-        cur.execute(querystr)
-        for row in cur:
-            self.authorEdit.setText(row[2])
-            self.descEdit.setText(row[3])
-            self.coverfile = '/Users/shichang/Workspace/programing/data/cover/%s.jpg' % row[0]
-            if os.path.exists(self.coverfile) == False:
-                response = requests.get(row[4], stream=True)
+        bookEntity = self.queryByName(self.titleEdit.text())
+        if bookEntity is None:
+            return
+        self.authorEdit.setText(bookEntity['author'])
+        self.descEdit.setText(bookEntity['desc'])
+        self.coverfile = '/Users/shichang/Workspace/program/data/cover/%s.jpg' % bookEntity['id']
+        if not os.path.exists(self.coverfile):
+            with requests.get(bookEntity['cover'], stream=True) as response:
                 with open(self.coverfile, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=1024):
                         if chunk:
                             f.write(chunk)
-            image = QPixmap(self.coverfile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
-            self.coverLabel.setPixmap(image)
-
-            tagIdx = self.mapTags(row[5])
-            self.parentTag.setCurrentIndex(tagIdx[0])
-            self.updateChildTag(tagIdx[0])
-            self.childTag.setCurrentIndex(tagIdx[1])
-
-            break
-        cur.close()
-        conn.close()
+        image = QPixmap(self.coverfile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
+        self.coverLabel.setPixmap(image)
+        tagIdx = self.mapTags(bookEntity['tags'])
+        self.parentTag.setCurrentIndex(tagIdx[0])
+        self.updateChildTag(tagIdx[0])
+        self.childTag.setCurrentIndex(tagIdx[1])
 
     def mapTags(self, input):
         tags = input.replace('[', '').replace(']','').split(', ')
@@ -148,7 +159,7 @@ class BookProperties(QWidget):
                 try:
                     return (catIdx + 1, cat['sub'].index(tag) + 1)
                 except:
-                    pass
+                    print('%s is not sub category tag' % tag)
                 if tag == cat['cat']:
                     index = catIdx
                     break
@@ -171,12 +182,10 @@ class BookProperties(QWidget):
             else:
                 pass
             print("文件编码不是utf-8,开始转换.....")
-            fpr = open(filepath, 'r', encoding=encode, errors="ignore")
-            filecontent = fpr.read()
-            fpr.close()
-            fpw = open(filepath, 'w', encoding="utf-8", errors="ignore")
-            fpw.write(filecontent)
-            fpw.close()
+            with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
+                filecontent = fpr.read()
+            with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
+                fpw.write(filecontent)
 
     def importBookInfo(self):
         # check book metadata
@@ -255,7 +264,7 @@ class BookProperties(QWidget):
             return 'empty'
         if line == '（全书完）' or line == '《全本完》':
             return 'ending'
-        if re.match(r'^\s*(楔子|序章|序言|序 |引子|终幕|后记).*',line):
+        if re.match(r'^\s*(楔子|序章|序言|序 |引子|终幕|后记|番外|完本感言).*',line):
             return 'subject'
         if re.match(r'^\s*[第卷][0123456789一二三四五六七八九十零〇百千两]*[章回部节集卷][:： ].*',line):
             return 'subject'
