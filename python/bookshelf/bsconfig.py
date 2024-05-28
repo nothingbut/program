@@ -43,7 +43,7 @@ class BookShelfConfig:
         return self.config.get('source.sourcePath')
     
     def getTagsJson(self):
-        return self.config.get('source.tagsJson')
+        return self.config.get('attr.tagsJson')
     
     def getChapterHeaderTemplate(self):
         return self.config.get('gen.chapterHeaderTemplate')
@@ -53,4 +53,4 @@ class BookShelfConfig:
     
 if __name__ == '__main__':
     bsconfig = BookShelfConfig()
-    print(bsconfig.getChapterTableHeader())
+    print(bsconfig.getTagsJson())

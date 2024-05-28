@@ -154,9 +154,9 @@ class BookshelfWnd(QMainWindow):
         self.book = bookData
         self.preloadContent()
     def generateChapter(self, chapter):
-        curcontent = ['<h2 id=\"title\">%s</h2>' % chapter[0]]
+        curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
         for idx in range(chapter[3], chapter[3] + chapter[4]):
-            curcontent.append('<p>%s</p>' % self.lines[idx].strip())
+            curcontent.append(self.config.getContentLineTemplate() % self.lines[idx].strip())
         return ''.join(curcontent)
 
     def preloadContent(self):

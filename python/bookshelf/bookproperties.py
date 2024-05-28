@@ -3,12 +3,15 @@ from pathlib import Path, PurePath
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMenu, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
+from bsconfig import BookShelfConfig
 
 class BookProperties(QWidget):
     imported = Signal(dict)
 
     def __init__(self, book = None):
         super().__init__()
+
+        self.config = BookShelfConfig()
 
         self.resize(400, 300)
         if book is None:
@@ -83,9 +86,7 @@ class BookProperties(QWidget):
         self.coverLabel.customContextMenuRequested.connect(self.showCoverMenu)
 
     def initTagComboBox(self):
-        self.allTags = []
-        with open('/Users/shichang/Workspace/program/data/tags.json','r') as fp:
-            self.allTags = json.load(fp)
+        self.allTags = self.config.getTagsJson()
 
         self.parentTag.addItem('--')
         for parent in self.allTags:
@@ -104,7 +105,7 @@ class BookProperties(QWidget):
         self.coverMenu.exec(self.coverLabel.mapToGlobal(pos))
 
     def openCoverFile(self):
-        imageFile, _ = QFileDialog.getOpenFileName(self, '选择封面图片', '/Users/shichang/Workspace/programing/data/cover', 'Image files (*.jpg *.png)')
+        imageFile, _ = QFileDialog.getOpenFileName(self, '选择封面图片', self.config.getCoverPath(), 'Image files (*.jpg *.png)')
         image = QPixmap(imageFile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
         self.coverfile = imageFile
         self.coverLabel.setPixmap(image)
@@ -113,9 +114,9 @@ class BookProperties(QWidget):
         pass
 
     def queryByName(self, name):
-        with sqlite3.connect('/Users/shichang/Downloads/temp/yousuu.db') as conn:
+        with sqlite3.connect(self.config.getBookDB()) as conn:
             cur = conn.cursor()
-            querystr = 'select id, title, author, desc, cover, tags from main.book_info where title = \'%s\'' % self.titleEdit.text()
+            querystr = self.config.getBookDetailQuery() % self.titleEdit.text()
             try:
                 cur.execute(querystr)
                 for row in cur:
@@ -136,7 +137,7 @@ class BookProperties(QWidget):
             return
         self.authorEdit.setText(bookEntity['author'])
         self.descEdit.setText(bookEntity['desc'])
-        self.coverfile = '/Users/shichang/Workspace/program/data/cover/%s.jpg' % bookEntity['id']
+        self.coverfile = self.config.getCoverPath() + '/%s.jpg' % bookEntity['id']
         if not os.path.exists(self.coverfile):
             with requests.get(bookEntity['cover'], stream=True) as response:
                 with open(self.coverfile, 'wb') as f:
@@ -159,7 +160,7 @@ class BookProperties(QWidget):
                 try:
                     return (catIdx + 1, cat['sub'].index(tag) + 1)
                 except:
-                    print('%s is not sub category tag' % tag)
+                    pass
                 if tag == cat['cat']:
                     index = catIdx
                     break
@@ -214,7 +215,7 @@ class BookProperties(QWidget):
         index = 0
         for line in lines:
             start += 1
-            subject = BookProperties.detectsubject(line)
+            subject = self.detectsubject(line)
 
             if subject == 'ending':
                 break
@@ -256,18 +257,20 @@ class BookProperties(QWidget):
             chapter[4] = length
 
     def openFile(self):
-        filePath = QFileDialog.getOpenFileName(self, '导入txt小说', '/Users/shichang/Downloads/temp/zxcs/', 'Text files (*.txt)')
+        filePath = QFileDialog.getOpenFileName(self, '导入txt小说', self.config.getSourcePath(), 'Text files (*.txt)')
         self.filepathEdit.setText(filePath[0])
 
-    def detectsubject(line):
+    def detectsubject(self, line):
         if line in string.whitespace:
             return 'empty'
-        if line == '（全书完）' or line == '《全本完》':
-            return 'ending'
-        if re.match(r'^\s*(楔子|序章|序言|序 |引子|终幕|后记|番外|完本感言).*',line):
-            return 'subject'
-        if re.match(r'^\s*[第卷][0123456789一二三四五六七八九十零〇百千两]*[章回部节集卷][:： ].*',line):
-            return 'subject'
+        endTags = self.config.getTextEndingList()
+        for tag in endTags:
+            if tag == line:
+                return 'ending'
+        subjectTags = self.config.getTextSubjectList()
+        for tag in subjectTags:
+            if re.match(tag, line):
+                return 'subject'
         return 'content'
 
 if __name__ == '__main__':
