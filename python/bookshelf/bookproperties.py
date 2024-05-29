@@ -5,6 +5,22 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
 from bsconfig import BookShelfConfig
 
+headers = {
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+    'Connection': 'keep-alive',
+    'DNT': '1',
+    'Origin': 'https://www.yousuu.com',
+    'Referer': 'https://www.yousuu.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-site',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'sec-ch-ua': '"Not?A_Brand";v="8", "Chromium";v="108", "Google Chrome";v="108"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+}
+
 class BookProperties(QWidget):
     imported = Signal(dict)
 
@@ -150,7 +166,11 @@ class BookProperties(QWidget):
         self.parentTag.setCurrentIndex(tagIdx[0])
         self.updateChildTag(tagIdx[0])
         self.childTag.setCurrentIndex(tagIdx[1])
-
+        cachefile = self.config.getCachePath() + '/%s.json' % bookEntity['id']
+        if not os.path.exists(cachefile):
+            result = requests.get(self.config.getBookDBUrl() % bookEntity['id'], headers=headers).json()
+            with open(cachefile, 'w') as f:
+                json.dump(result, f) 
     def mapTags(self, input):
         tags = input.replace('[', '').replace(']','').split(', ')
         index = -1

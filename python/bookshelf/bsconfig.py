@@ -27,8 +27,14 @@ class BookShelfConfig:
     def getCoverPath(self):
         return self.config.get('env.coverPath')
     
+    def getCachePath(self):
+        return self.config.get('env.cachePath')
+
     def getBookDB(self):
         return self.config.get('source.bookDB')
+    
+    def getBookDBUrl(self):
+        return self.config.get("source.yousuu")
     
     def getBookDetailQuery(self):
         return self.config.get('source.bookDetailQuery')
