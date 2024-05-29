@@ -10,3 +10,4 @@ node_modules
 obj
 bun.lockb
 package-lock.json
+data/cache
