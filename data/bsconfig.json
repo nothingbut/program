@@ -3,6 +3,7 @@
    "env.targetFile": "/Users/shichang/Workspace/program/data/%s.epub",
    "env.coverPath": "/Users/shichang/Workspace/program/data/cover",
    "env.cachePath": "/Users/shichang/Workspace/program/data/cache",
+   "env.bookShelf": "/Users/shichang/Workspace/program/data/books",
    "source.sourcePath": "/Users/shichang/Downloads/temp/zxcs/",
    "source.bookDB": "/Users/shichang/Downloads/temp/yousuu.db",
    "source.yousuu": "https://api.yousuu.com/api/book/%s",

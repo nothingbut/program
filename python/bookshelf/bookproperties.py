@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdi
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
 from bsconfig import BookShelfConfig
+from enum import Enum
 
 headers = {
     'Accept': 'application/json, text/plain, */*',
@@ -21,6 +22,12 @@ headers = {
     'sec-ch-ua-platform': '"Windows"',
 }
 
+class BookStatus(Enum):
+    none = 0
+    new = 1
+    modified = 2
+    delete = 3
+    
 class BookProperties(QWidget):
     imported = Signal(dict)
 
@@ -150,7 +157,9 @@ class BookProperties(QWidget):
     def autofillInfo(self):
         bookEntity = self.queryByName(self.titleEdit.text())
         if bookEntity is None:
+            self.book['id'] = '-1'
             return
+        self.book['id'] = '%s' % bookEntity['id']
         self.authorEdit.setText(bookEntity['author'])
         self.descEdit.setText(bookEntity['desc'])
         self.coverfile = self.config.getCoverPath() + '/%s.jpg' % bookEntity['id']
@@ -245,13 +254,7 @@ class BookProperties(QWidget):
                 chapters = self.book['chapters']
                 if chapters.__len__() > 0:
                     chapters[chapters.__len__() - 1][4] = start - 1 - empty
-                chapter = {}
-                chapter[0] = line
-                chapter[1] = ''
-                chapter[2] = filepath
-                chapter[3] = start
-                chapter[4] = 0
-                chapter[5] = index
+                chapter = [line,'',filepath,start,0,index]
                 chapters.append(chapter)
                 empty = 0
                 index += 1

@@ -11,3 +11,4 @@ obj
 bun.lockb
 package-lock.json
 data/cache
+data/books

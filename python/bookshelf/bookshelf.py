@@ -1,13 +1,10 @@
-import sys, mkepub
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeView, QTableView, QFrame, QHeaderView, QStatusBar
+import sys, mkepub, json, os
+from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem
 from PySide6.QtGui import QAction, QCursor
 from PySide6.QtCore import Qt, QAbstractTableModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from bookproperties import BookProperties
+from bookproperties import BookProperties, BookStatus
 from bsconfig import BookShelfConfig
-
-cssfile = '/Users/shichang/Workspace/program/data/epub.css'
-targettemp = '/Users/shichang/Workspace/program/data/%s.epub'
 
 class TOCModel(QAbstractTableModel):
     def __init__(self, parent, chaptersList, *args):
@@ -22,7 +19,7 @@ class TOCModel(QAbstractTableModel):
         return len(self.chaptersList)
     
     def columnCount(self, parent = None):
-        return len(self.chaptersList[0])
+        return len(self.header)
     
     def data(self, index, role):
         if not index.isValid():
@@ -38,7 +35,7 @@ class TOCModel(QAbstractTableModel):
     
     def rawIndex(self, row):
         return self.chaptersList[row][5]
-
+    
 class BookshelfWnd(QMainWindow):
     def __init__(self,parent=None):
         super(BookshelfWnd, self).__init__(parent)
@@ -49,7 +46,7 @@ class BookshelfWnd(QMainWindow):
     def initConfig(self):
         self.config = BookShelfConfig()
     def initModel(self):
-        self.chapterList = [('','','','','','')]
+        self.chapterList = list()
         self.tocModel = TOCModel(self, self.chapterList)
 
     def initUI(self, parent=None):
@@ -64,6 +61,9 @@ class BookshelfWnd(QMainWindow):
         self.btBuild.triggered.connect(self.onGenerateEpub)
         self.btBuild.setEnabled(False)
         toolbar.addAction(self.btBuild)
+        self.btSave = QAction("保存书架", self)
+        self.btSave.triggered.connect(self.onSaveShelf)        
+        toolbar.addAction(self.btSave)
 
         statusbar = QStatusBar(self)
         self.setStatusBar(statusbar)
@@ -73,7 +73,7 @@ class BookshelfWnd(QMainWindow):
 
         self.mainSplitter.setOrientation(Qt.Horizontal)
         
-        self.shelfView = QTreeView(self.mainSplitter)
+        self.shelfView = QTreeWidget(self.mainSplitter)
         self.mainSplitter.addWidget(self.shelfView)
 
         self.rightSplitter = QSplitter(self.mainSplitter)
@@ -112,8 +112,40 @@ class BookshelfWnd(QMainWindow):
         self.mainSplitter.addWidget(self.rightSplitter)
         self.mainSplitter.setSizes([1000, 5000])
 
+        self.initTagTree()
+        self.shelfView.itemClicked.connect(self.onSelectBook)
         self.setCentralWidget(self.mainSplitter)
+
+        self.loadBooks()
     
+    def initTagTree(self):
+        self.shelfView.setColumnCount(1)
+        self.shelfView.setHeaderLabels(['书架'])
+        allTags = self.config.getTagsJson()
+        for top in allTags:
+            topItem = QTreeWidgetItem(self.shelfView)
+            topItem.setText(0, top['cat'])
+            for tag in top['sub']:
+                tagItem = QTreeWidgetItem()
+                tagItem.setText(0, tag)
+                topItem.addChild(tagItem)
+            self.shelfView.addTopLevelItem(topItem)
+        
+        otherItem = QTreeWidgetItem(self.shelfView)
+        otherItem.setText(0, '其他')
+        self.shelfView.addTopLevelItem(otherItem)
+        
+    def loadBooks(self):
+        self.bookList = {'-1': None}
+        self.curBook = '-1'
+        bookfiles =  os.listdir(self.config.getBookShelf())
+        for file in bookfiles:
+            filename = '%s/%s' % (self.config.getBookShelf(), file)
+            with open(filename, 'r') as f:
+                book = json.load(f)
+                book['status'] = BookStatus.none
+                self.addBook2Shelf(book)
+
     def showMergeMenu(self):
         self.tocView.contextMenu = QMenu(self)
         self.mergeChapterAction = self.tocView.contextMenu.addAction('合并章节')
@@ -142,17 +174,20 @@ class BookshelfWnd(QMainWindow):
         # Code to import book text file
         self.bookProperties = BookProperties()
         self.bookProperties.show()
-        self.bookProperties.imported.connect(self.refreshTocModel)
+        self.bookProperties.imported.connect(self.importBook)
         self.btBuild.setEnabled(True)
 
     def refreshTocModel(self, bookData):
         self.chapterList.clear()
         for chapter in bookData['chapters']:
             self.chapterList.append(chapter)
+
         self.tocModel = TOCModel(self, self.chapterList)
+
         self.tocView.setModel(self.tocModel)
         self.book = bookData
         self.preloadContent()
+
     def generateChapter(self, chapter):
         curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
         for idx in range(chapter[3], chapter[3] + chapter[4]):
@@ -189,6 +224,49 @@ class BookshelfWnd(QMainWindow):
         chapter = self.chapterList[self.tocModel.rawIndex(self.tocView.currentIndex().row())]
         self.chapterTab.setHtml(self.generateChapter(chapter))
         self.chapterTab.setVisible(True)
+
+    def addBook2Shelf(self, book):
+        tags = book['tags']
+        topAmount = self.shelfView.topLevelItemCount()
+        for top in range(0, topAmount):
+            cat = self.shelfView.topLevelItem(top)
+            if tags[0] != cat.text(0):
+                continue
+            childAmount = cat.childCount()
+            for idx in range(0, childAmount):
+                if tags[1] == cat.child(idx).text(0):
+                    bookItem = QTreeWidgetItem()
+                    bookItem.setText(0, book['title'])
+                    bookItem.setWhatsThis(0, book['id'])
+                    cat.child(idx).addChild(bookItem)
+        
+        self.bookList[book['id']] = book
+
+    def importBook(self, book):
+        book['status'] = BookStatus.new
+        self.addBook2Shelf(book)
+        self.refreshTocModel(book)
+    def onSelectBook(self, item, column):
+        self.curBook = item.whatsThis(0)
+        book = self.bookList[self.curBook]
+        self.refreshTocModel(book)
+
+    def onSaveShelf(self):
+        self.saveBookList()
+
+    def saveBookList(self):
+        allBookIds = self.bookList.keys()
+        for id in allBookIds:
+            book = self.bookList[id]
+            if book == None:
+                continue
+            if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
+                filename = '%s/%s.json' % (self.config.getBookShelf(), id)
+                with open(filename, 'w') as f:
+                    book['status'] = None
+                    json.dump(book, f, ensure_ascii=False)
+                    book['status'] = BookStatus.none
+
 def main():
     app = QApplication(sys.argv)
     mainWnd = BookshelfWnd()

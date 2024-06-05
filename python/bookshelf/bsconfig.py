@@ -30,6 +30,9 @@ class BookShelfConfig:
     def getCachePath(self):
         return self.config.get('env.cachePath')
 
+    def getBookShelf(self):
+        return self.config.get('env.bookShelf')
+    
     def getBookDB(self):
         return self.config.get('source.bookDB')
     
