@@ -1,4 +1,4 @@
-import sys, mkepub, json, os
+import sys, mkepub, json, csv
 from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem
 from PySide6.QtGui import QAction, QCursor
 from PySide6.QtCore import Qt, QAbstractTableModel
@@ -116,7 +116,7 @@ class BookshelfWnd(QMainWindow):
         self.shelfView.itemClicked.connect(self.onSelectBook)
         self.setCentralWidget(self.mainSplitter)
 
-        self.loadBooks()
+        self.loadShelf()
     
     def initTagTree(self):
         self.shelfView.setColumnCount(1)
@@ -135,17 +135,20 @@ class BookshelfWnd(QMainWindow):
         otherItem.setText(0, '其他')
         self.shelfView.addTopLevelItem(otherItem)
         
-    def loadBooks(self):
+    def loadShelf(self):
         self.bookList = {'-1': None}
         self.curBook = '-1'
-        bookfiles =  os.listdir(self.config.getBookShelf())
-        for file in bookfiles:
-            filename = '%s/%s' % (self.config.getBookShelf(), file)
-            with open(filename, 'r') as f:
-                book = json.load(f)
-                book['status'] = BookStatus.none
+        with open('%s/shelf.csv' % self.config.getBookShelf(), 'r') as f:
+            reader = csv.reader(f)
+            for item in reader:
+                book = {'id': item[0], 'title': item[1], 'tags': [item[2], item[3]], 'status': BookStatus.none}
                 self.addBook2Shelf(book)
-
+    def loadBook(self, id):
+        filename = '%s/%s.json' % (self.config.getBookShelf(), id)
+        with open(filename, 'r') as f:
+            book = json.load(f)
+            book['status'] = BookStatus.load
+            self.bookList[id] = book
     def showMergeMenu(self):
         self.tocView.contextMenu = QMenu(self)
         self.mergeChapterAction = self.tocView.contextMenu.addAction('合并章节')
@@ -177,15 +180,16 @@ class BookshelfWnd(QMainWindow):
         self.bookProperties.imported.connect(self.importBook)
         self.btBuild.setEnabled(True)
 
-    def refreshTocModel(self, bookData):
+    def refreshTocModel(self, book):
         self.chapterList.clear()
-        for chapter in bookData['chapters']:
+        print(book.keys())
+        for chapter in book['chapters']:
             self.chapterList.append(chapter)
 
         self.tocModel = TOCModel(self, self.chapterList)
 
         self.tocView.setModel(self.tocModel)
-        self.book = bookData
+        self.book = book
         self.preloadContent()
 
     def generateChapter(self, chapter):
@@ -246,26 +250,40 @@ class BookshelfWnd(QMainWindow):
         book['status'] = BookStatus.new
         self.addBook2Shelf(book)
         self.refreshTocModel(book)
+
     def onSelectBook(self, item, column):
         self.curBook = item.whatsThis(0)
         book = self.bookList[self.curBook]
-        self.refreshTocModel(book)
+        print(book)
+        if book['status'] == BookStatus.none:
+            self.loadBook(self.curBook)
+        self.refreshTocModel(self.bookList[self.curBook])
 
     def onSaveShelf(self):
         self.saveBookList()
 
     def saveBookList(self):
         allBookIds = self.bookList.keys()
+        bookSummaryList = list()
         for id in allBookIds:
             book = self.bookList[id]
             if book == None:
                 continue
+            if book['status'] == BookStatus.delete:
+                continue
+            bookSummaryList.append([book['id'], book['title'], book['tags'][0], book['tags'][1]])
             if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
-                filename = '%s/%s.json' % (self.config.getBookShelf(), id)
-                with open(filename, 'w') as f:
-                    book['status'] = None
-                    json.dump(book, f, ensure_ascii=False)
-                    book['status'] = BookStatus.none
+                self.saveBook(book)
+
+        with open('%s/shelf.csv' % self.config.getBookShelf(), 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(bookSummaryList)
+    def saveBook(self, book):
+        filename = '%s/%s.json' % (self.config.getBookShelf(), book['id'])
+        with open(filename, 'w') as f:
+            book['status'] = None
+            json.dump(book, f, ensure_ascii=False)
+            book['status'] = BookStatus.load
 
 def main():
     app = QApplication(sys.argv)

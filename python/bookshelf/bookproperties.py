@@ -23,7 +23,8 @@ headers = {
 }
 
 class BookStatus(Enum):
-    none = 0
+    none = -1
+    load = 0
     new = 1
     modified = 2
     delete = 3
