@@ -135,6 +135,20 @@ class BookshelfWnd(QMainWindow):
         otherItem.setText(0, '其他')
         self.shelfView.addTopLevelItem(otherItem)
         
+        self.shelfView.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.shelfView.customContextMenuRequested.connect(self.showTreeItemMenu)
+
+    def showTreeItemMenu(self, pos):
+        item = self.shelfView.currentItem()
+        if item == None:
+            return
+        if item.whatsThis(0) == None or item.whatsThis(0) == '':
+            return
+        popMenu = QMenu(self)
+        self.deleteBookAction = popMenu.addAction('删除')
+        self.deleteBookAction.triggered.connect(self.deleteBook)
+        popMenu.exec(QCursor.pos())
+ 
     def loadShelf(self):
         self.bookList = {'-1': None}
         self.curBook = '-1'
@@ -149,6 +163,17 @@ class BookshelfWnd(QMainWindow):
             book = json.load(f)
             book['status'] = BookStatus.load
             self.bookList[id] = book
+
+    def deleteBook(self):
+        item = self.shelfView.currentItem()
+        id = item.whatsThis(0)
+        self.bookList[id]['status'] = BookStatus.delete
+        item.parent().removeChild(item)
+
+        if id == self.curBook:
+            self.curBook = '-1'
+            self.clearTocModel()
+
     def showMergeMenu(self):
         self.tocView.contextMenu = QMenu(self)
         self.mergeChapterAction = self.tocView.contextMenu.addAction('合并章节')
@@ -182,7 +207,7 @@ class BookshelfWnd(QMainWindow):
 
     def refreshTocModel(self, book):
         self.chapterList.clear()
-        print(book.keys())
+        
         for chapter in book['chapters']:
             self.chapterList.append(chapter)
 
@@ -192,6 +217,11 @@ class BookshelfWnd(QMainWindow):
         self.book = book
         self.preloadContent()
 
+    def clearTocModel(self):
+        self.chapterList.clear()
+        self.tocModel = TOCModel(self, self.chapterList)
+        self.tocView.setModel(self.tocModel)
+        self.book = None
     def generateChapter(self, chapter):
         curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
         for idx in range(chapter[3], chapter[3] + chapter[4]):
@@ -203,7 +233,8 @@ class BookshelfWnd(QMainWindow):
             content = fp.read()
             self.lines = content.rsplit("\n")
     def onGenerateEpub(self):
-        book = mkepub.Book(title=self.book['title'],author=self.book['author'],description=self.book['desc'],subjects=self.book['tags'])
+        book = mkepub.Book(title=self.book['title'],author=self.book['author'],
+                           description=self.book['desc'],subjects=self.book['tags'])
         with open(self.book['cover'], 'rb') as file:
             book.set_cover(file.read())
 
@@ -252,9 +283,10 @@ class BookshelfWnd(QMainWindow):
         self.refreshTocModel(book)
 
     def onSelectBook(self, item, column):
+        if item.whatsThis(0) == '':
+            return
         self.curBook = item.whatsThis(0)
         book = self.bookList[self.curBook]
-        print(book)
         if book['status'] == BookStatus.none:
             self.loadBook(self.curBook)
         self.refreshTocModel(self.bookList[self.curBook])
