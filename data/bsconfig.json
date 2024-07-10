@@ -8,7 +8,7 @@
    "source.bookDB": "/Users/shichang/Downloads/temp/yousuu.db",
    "source.yousuu": "https://api.yousuu.com/api/book/%s",
    "source.bookDetailQuery": "select id, title, author, desc, cover, tags from main.book_info where title = \"%s\"",
-   "parser.textSubjectList": ["^\\s*(楔子|序章|序言|序 |引子|终幕|后记|番外|完本感言).*", "^\\s*[第卷][0123456789一二三四五六七八九十零〇百千两]*[章回部节集卷][:： ].*"],
+   "parser.textSubjectList": ["^\\s*%s(楔子|序章|序言|序 |引子|终幕|后记|番外|完本感言).*","^\\s*%s[第卷][0123456789一二三四五六七八九十零〇百千两]*[章回部节集卷][:： ].*"],
    "parser.textEndingList": ["（全书完）", "《全本完》"],
    "gen.chapterHeaderTemplate": "<h2 id=\"title\">%s</h2>",
    "gen.contentLineTemplate": "<p>%s</p>",

@@ -80,6 +80,7 @@ class BookProperties(QWidget):
         self.tagPanel.addWidget(self.childTag)
         self.initTagComboBox()
         self.descEdit = QTextEdit(self.book.get('desc'))
+        self.extraEdit = QTextEdit('volumn:')
 
         self.actionPanel = QHBoxLayout()
         self.autoFill = QPushButton("O")
@@ -96,6 +97,7 @@ class BookProperties(QWidget):
         layout.addLayout(self.infoPanel)
         layout.addLayout(self.tagPanel)
         layout.addWidget(self.descEdit)
+        layout.addWidget(self.extraEdit)
         layout.addLayout(self.actionPanel)
 
         self.setLayout(layout)
@@ -238,53 +240,69 @@ class BookProperties(QWidget):
         content = fp.read()
         fp.close
 
-        self.book['chapters'] = []
         lines = content.rsplit("\n")
+
+        self.book['chapters'] = self.identifyChapters(filepath, lines)
+        self.arrangeVolumns(lines)
+
+        self.imported.emit(self.book)
+        self.close()
+
+    def identifyChapters(self, filepath, lines):
+        chapters = []
         start = 0
         empty = 0
         index = 0
+
+        extraText = self.extraEdit.toPlainText()
+        prefixes = extraText.rsplit("\n")
+        prefixes.append('')
         for line in lines:
             start += 1
-            subject = self.detectsubject(line)
+            type = self.detectsubject(line, prefixes)
 
-            if subject == 'ending':
+            if type == 'ending':
                 break
-            if subject == 'empty':
+            if type == 'empty':
                 empty += 1
-            if subject == 'subject':
-                chapters = self.book['chapters']
+            if type.startswith('subject:'):
                 if chapters.__len__() > 0:
                     chapters[chapters.__len__() - 1][4] = start - 1 - empty
-                chapter = [line,'',filepath,start,0,index]
+                chapter = [line,type.replace('subject:',''),filepath,start,0,index]
                 chapters.append(chapter)
                 empty = 0
                 index += 1
 
-        chapters = self.book['chapters']
         if chapters.__len__() > 0:
             chapters[chapters.__len__() - 1][4] = start - 1 - empty
+        return chapters
 
-        print("导入书籍信息完成!")
-        self.arrangeVolumns()
-        self.imported.emit(self.book)
-        self.close()
-
-    def arrangeVolumns(self):
+    def arrangeVolumns(self, lines):
         curvol = '正文'
         for chapter in self.book['chapters']:
-            length = chapter[4] - chapter[3]
-            if  length <= 3:
-                chapter[1] = 'volumn'
-                curvol = chapter[0]
+            chapter[4] = chapter[4] - chapter[3]
+            backfill = False
+            if chapter[4] > 3:
+                backfill = True
             else:
-                chapter[1] = curvol
-            chapter[4] = length
+                for idx in range(chapter[3], chapter[3] + chapter[4]):
+                    if len(lines[idx]) > 100:
+                        backfill = True
+                        chapter[1] = curvol
+                        break
+
+            if chapter[1] == '':
+                if backfill:
+                    chapter[1] = curvol
+                else:
+                    chapter[1] = 'volumn'
+                    curvol = chapter[0]
 
     def openFile(self):
         filePath = QFileDialog.getOpenFileName(self, '导入txt小说', self.config.getSourcePath(), 'Text files (*.txt)')
         self.filepathEdit.setText(filePath[0])
 
-    def detectsubject(self, line):
+    def detectsubject(self, line, prefixes):
         if line in string.whitespace:
             return 'empty'
         endTags = self.config.getTextEndingList()
@@ -293,8 +311,9 @@ class BookProperties(QWidget):
                 return 'ending'
         subjectTags = self.config.getTextSubjectList()
         for tag in subjectTags:
-            if re.match(tag, line):
-                return 'subject'
+            for prefix in prefixes:
+                if re.match(tag % prefix, line):
+                    return 'subject:%s' % prefix
         return 'content'
 
 if __name__ == '__main__':
