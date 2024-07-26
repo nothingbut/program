@@ -1,10 +1,5 @@
-import requests, time
+import requests, time, json
 import sqlite3
-
-def cleanup():
-    conn.commit()
-    cur.close()
-    conn.close()
 
 headers = {
     'Accept': 'application/json, text/plain, */*',
@@ -21,21 +16,42 @@ headers = {
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
 }
-conn = sqlite3.connect('/Users/shichang/Workspace/programing/data/yousuu.db')
-cur = conn.cursor()
 ids = 400000
-querystr = 'select max(id) from main.book_info'
-cur.execute(querystr)
-total = 0
-for row in cur:
-    if row[0] == None:
-        break
-    total = int(row[0])
-print('total is %d' % total)
+max = 0
+conn = sqlite3.connect('/Users/shichang/Downloads/temp/yousuu.db')
+querycur = conn.cursor()
+querystr = 'select id from main.book_info where updated = False'
+querycur.execute(querystr)
+updatecur = conn.cursor()
+
+count = 0
+try:
+    for row in querycur:
+        max = int(row[0])
+        result = requests.get('https://api.yousuu.com/api/book/' + str(max), headers=headers).json()
+        with open('/Users/shichang/Workspace/program/data/cache/%d.json' % max, 'w') as f:
+            json.dump(result, f, ensure_ascii=False) 
+        time.sleep(1)
+        updatestr = 'update main.book_info set updated = True where id = %d' % max
+        updatecur.execute(updatestr)
+        count = count + 1
+        if count == 100:
+            print('updated on %d' % max)
+            conn.commit()
+            count = 0
+
+finally:
+    print('close legacy update on %d' % max)
+    conn.commit()
+    querycur.close()
+    updatecur.close()
+
+print('existing is %d' % max)
 count = 0
 error = 0
+insertcur = conn.cursor()
 for id in range(ids):  
-    if id < total:
+    if id < max:
         continue
 
     if error > 100:
@@ -43,7 +59,9 @@ for id in range(ids):
         break
 
     result = requests.get('https://api.yousuu.com/api/book/' + str(id + 1), headers=headers).json()
-    time.sleep(2)
+    with open('/Users/shichang/Workspace/program/data/cache/%d.json' % (id + 1), 'w') as f:
+        json.dump(result, f, ensure_ascii=False) 
+    time.sleep(1)
 
     if result.get('success') != True:
         error += 1
@@ -57,14 +75,14 @@ for id in range(ids):
     tags = tags + ']'
     if book.get('introduction') == None:
         book['introduction'] = ''
-    sqlstring = 'insert into main.book_info values (%d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', NULL)' % (int (book.get('_id')), 
+    sqlstring = 'insert into main.book_info values (%d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', NULL, True)' % (int (book.get('_id')), 
                                                                                             book.get('title').replace('\'', '\\\t'), 
                                                                                             book.get('author').replace('\'', '\\\t'), 
                                                                                             book.get('cover'), 
                                                                                             book.get('introduction').replace('\'', '’'), 
                                                                                             tags)
     try:
-        cur.execute(sqlstring)
+        insertcur.execute(sqlstring)
     except:
         print('failed to execute [%s]' % sqlstring)
         break
@@ -74,4 +92,8 @@ for id in range(ids):
         print('commit by %d' % (id - 1))
         conn.commit()
         count = 0
-cleanup()
+
+    conn.commit()
+    insertcur.close()
+    conn.close()
+
