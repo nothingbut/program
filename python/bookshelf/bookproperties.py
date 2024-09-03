@@ -35,13 +35,17 @@ class BookProperties(QWidget):
     def __init__(self, book = None):
         super().__init__()
 
-        self.config = BookShelfConfig()
-
-        self.resize(400, 300)
         if book is None:
             self.book = {}
         else:
             self.book = book
+            print(self.book)
+
+        self.config = BookShelfConfig()
+        self.initUI()
+
+    def initUI(self):
+        self.resize(400, 300)
 
         layout = QVBoxLayout()
 
@@ -57,10 +61,15 @@ class BookProperties(QWidget):
         self.openFileBnt = QPushButton("...")
         self.openFileBnt.clicked.connect(self.openFile)
         self.basicInfo.addWidget(self.openFileBnt, 2, 0)
+        self.sourceInfo = QHBoxLayout()
         self.filepathEdit = QLineEdit(self.book.get('filepath'))
         self.filepathEdit.setReadOnly(True)
         self.filepathEdit.textChanged.connect(self.updateFilePath)
-        self.basicInfo.addWidget(self.filepathEdit, 2, 1)
+        self.sourceInfo.addWidget(self.filepathEdit)
+        self.bookIdBox = QComboBox(self)
+        self.sourceInfo.addWidget(self.bookIdBox)
+        self.initBookIdCombo()
+        self.basicInfo.addLayout(self.sourceInfo, 2, 1)
 
         self.infoPanel = QHBoxLayout()
         self.infoPanel.addLayout(self.basicInfo)
@@ -73,12 +82,18 @@ class BookProperties(QWidget):
 
         self.tagPanel = QHBoxLayout()
         self.descLabel = QLabel("简介")
+        self.statusList = QComboBox()
+        self.sitesList = QComboBox()
         self.parentTag = QComboBox()
         self.childTag = QComboBox()
         self.tagPanel.addWidget(self.descLabel)
+        self.tagPanel.addWidget(self.statusList)
+        self.tagPanel.addWidget(self.sitesList)
         self.tagPanel.addWidget(self.parentTag)
         self.tagPanel.addWidget(self.childTag)
-        self.initTagComboBox()
+        self.statusList.addItems(['完本', '太监'])
+        self.initSourceComobo()
+        self.initTagCombo()
         self.descEdit = QTextEdit(self.book.get('desc'))
         self.extraEdit = QTextEdit('volumn:')
 
@@ -87,7 +102,7 @@ class BookProperties(QWidget):
         self.autoFill.clicked.connect(self.autofillInfo)
         self.cancel = QPushButton("取消")
         self.cancel.clicked.connect(self.close)
-        self.importBook = QPushButton("导入")
+        self.importBook = QPushButton("确定")
         self.importBook.clicked.connect(self.importBookInfo)
 
         self.actionPanel.addWidget(self.autoFill)
@@ -111,7 +126,11 @@ class BookProperties(QWidget):
         self.coverLabel.setContextMenuPolicy(Qt.CustomContextMenu)
         self.coverLabel.customContextMenuRequested.connect(self.showCoverMenu)
 
-    def initTagComboBox(self):
+    def initSourceComobo(self):
+        for source in self.config.getSourceList():
+            self.sitesList.addItem(source)
+
+    def initTagCombo(self):
         self.allTags = self.config.getTagsJson()
 
         self.parentTag.addItem('--')
@@ -119,6 +138,9 @@ class BookProperties(QWidget):
             self.parentTag.addItem(parent['cat'])
         self.childTag.addItem('--')
         self.parentTag.activated.connect(self.updateChildTag)
+
+    def initBookIdCombo(self):
+        self.bookIdBox.addItem('000000')
 
     def updateChildTag(self, index):
         self.childTag.clear()
@@ -178,11 +200,7 @@ class BookProperties(QWidget):
         self.parentTag.setCurrentIndex(tagIdx[0])
         self.updateChildTag(tagIdx[0])
         self.childTag.setCurrentIndex(tagIdx[1])
-        cachefile = self.config.getCachePath() + '/%s.json' % bookEntity['id']
-        if not os.path.exists(cachefile):
-            result = requests.get(self.config.getBookDBUrl() % bookEntity['id'], headers=headers).json()
-            with open(cachefile, 'w') as f:
-                json.dump(result, f) 
+
     def mapTags(self, input):
         tags = input.replace('[', '').replace(']','').split(', ')
         index = -1
@@ -199,6 +217,7 @@ class BookProperties(QWidget):
                 catIdx += 1
 
         return (index + 1, 0)
+
     def updateFilePath(self):
         self.book['filepath'] = self.filepathEdit.text()
         self.titleEdit.setText(PurePath(self.book['filepath']).name[0:-4])
@@ -232,6 +251,8 @@ class BookProperties(QWidget):
         self.book['cover'] = self.coverfile
         self.book['source'] = self.filepathEdit.text()
         self.book['tags'] = ['%s' % self.parentTag.currentText(), '%s' % self.childTag.currentText()]
+        self.book['site'] = self.sitesList.currentText()
+#        self.book['status'] = self.statusList.currentText()
 
         # parse all chapters
         filepath = self.book['filepath']

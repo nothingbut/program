@@ -24,11 +24,13 @@ querystr = 'select id from main.book_info where updated = False'
 querycur.execute(querystr)
 updatecur = conn.cursor()
 
+requests.packages.urllib3.disable_warnings()
+
 count = 0
 try:
     for row in querycur:
         max = int(row[0])
-        result = requests.get('https://api.yousuu.com/api/book/' + str(max), headers=headers).json()
+        result = requests.get('https://api.yousuu.com/api/book/' + str(max), headers=headers, verify=False).json()
         with open('/Users/shichang/Workspace/program/data/cache/%d.json' % max, 'w') as f:
             json.dump(result, f, ensure_ascii=False) 
         time.sleep(1)

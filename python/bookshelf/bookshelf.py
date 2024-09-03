@@ -1,10 +1,11 @@
 import sys, mkepub, json, csv
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem
+from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem, QInputDialog
 from PySide6.QtGui import QAction, QCursor
 from PySide6.QtCore import Qt, QAbstractTableModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from bookproperties import BookProperties, BookStatus
 from bsconfig import BookShelfConfig
+from bookutils import BookUtils
 
 class TOCModel(QAbstractTableModel):
     def __init__(self, parent, chaptersList, *args):
@@ -45,6 +46,7 @@ class BookshelfWnd(QMainWindow):
 
     def initConfig(self):
         self.config = BookShelfConfig()
+
     def initModel(self):
         self.chapterList = list()
         self.tocModel = TOCModel(self, self.chapterList)
@@ -57,9 +59,11 @@ class BookshelfWnd(QMainWindow):
         self.btImport = QAction("导入txt小说", self)
         self.btImport.triggered.connect(self.onImportText)
         toolbar.addAction(self.btImport)
+        self.btPrepare = QAction("生成Pandoc文件", self)
+        self.btPrepare.triggered.connect(self.onPrepare)
+        toolbar.addAction(self.btPrepare)
         self.btBuild = QAction("生成epub小说", self)
         self.btBuild.triggered.connect(self.onGenerateEpub)
-        self.btBuild.setEnabled(False)
         toolbar.addAction(self.btBuild)
         self.btSave = QAction("保存书架", self)
         self.btSave.triggered.connect(self.onSaveShelf)        
@@ -92,7 +96,7 @@ class BookshelfWnd(QMainWindow):
         
         self.tocView.horizontalHeader().setStretchLastSection(True)
         self.tocView.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.tocView.customContextMenuRequested.connect(self.showMergeMenu)
+        self.tocView.customContextMenuRequested.connect(self.showContextMenu)
         self.tocView.clicked.connect(self.showChapterContent)
         
         self.rightSplitter.addWidget(self.tocView)
@@ -145,6 +149,8 @@ class BookshelfWnd(QMainWindow):
         if item.whatsThis(0) == None or item.whatsThis(0) == '':
             return
         popMenu = QMenu(self)
+        self.modifyMetaAction = popMenu.addAction('修改')
+        self.modifyMetaAction.triggered.connect(self.modifyMeta)
         self.deleteBookAction = popMenu.addAction('删除')
         self.deleteBookAction.triggered.connect(self.deleteBook)
         popMenu.exec(QCursor.pos())
@@ -157,12 +163,20 @@ class BookshelfWnd(QMainWindow):
             for item in reader:
                 book = {'id': item[0], 'title': item[1], 'tags': [item[2], item[3]], 'status': BookStatus.none}
                 self.addBook2Shelf(book)
+
     def loadBook(self, id):
         filename = '%s/%s.json' % (self.config.getBookShelf(), id)
         with open(filename, 'r') as f:
             book = json.load(f)
             book['status'] = BookStatus.load
             self.bookList[id] = book
+
+    def modifyMeta(self):
+        item = self.shelfView.currentItem()
+        id = item.whatsThis(0)
+        book = self.bookList[id]
+        self.bookProperties = BookProperties(book)
+        self.bookProperties.show()
 
     def deleteBook(self):
         item = self.shelfView.currentItem()
@@ -174,19 +188,21 @@ class BookshelfWnd(QMainWindow):
             self.curBook = '-1'
             self.clearTocModel()
 
-    def showMergeMenu(self):
+    def showContextMenu(self):
         self.tocView.contextMenu = QMenu(self)
         self.mergeChapterAction = self.tocView.contextMenu.addAction('合并章节')
+        self.modifyVolumnAction = self.tocView.contextMenu.addAction('更改卷名')
         self.tocView.contextMenu.popup(QCursor.pos()) 
         self.mergeChapterAction.triggered.connect(self.onMergeChapter)
+        self.modifyVolumnAction.triggered.connect(self.onModifyVolumn)
         self.tocView.contextMenu.show()
 
     def onMergeChapter(self):
-        selection = self.tocView.selectedIndexes()
-        if len(selection) < 2:
+        selections = self.tocView.selectedIndexes()
+        if len(selections) < 2:
             return
-        start = self.tocModel.rawIndex(selection[0].row())
-        end = self.tocModel.rawIndex(selection[-1].row())
+        start = self.tocModel.rawIndex(selections[0].row())
+        end = self.tocModel.rawIndex(selections[-1].row())
         count = 0
         for i in range(end, start - 1, -1):
             count += self.chapterList[i][4]
@@ -198,12 +214,22 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setModel(self.tocModel)
         self.tocView.setColumnHidden(5, True)
 
+    def onModifyVolumn(self):
+        volumn = volumn, ok = QInputDialog.getText(self, '更新卷名', '新的卷名')
+        selections = self.tocView.selectedIndexes()
+        start = self.tocModel.rawIndex(selections[0].row())
+        end = self.tocModel.rawIndex(selections[-1].row())
+        for i in range(end, start - 1, -1):
+            self.chapterList[i][1] = volumn
+        self.tocModel = TOCModel(self, self.chapterList)
+        self.tocView.setModel(self.tocModel)
+        self.tocView.setColumnHidden(5, True)        
+
     def onImportText(self, checked):
         # Code to import book text file
         self.bookProperties = BookProperties()
         self.bookProperties.show()
         self.bookProperties.imported.connect(self.importBook)
-        self.btBuild.setEnabled(True)
 
     def refreshTocModel(self, book):
         self.chapterList.clear()
@@ -222,6 +248,7 @@ class BookshelfWnd(QMainWindow):
         self.tocModel = TOCModel(self, self.chapterList)
         self.tocView.setModel(self.tocModel)
         self.book = None
+
     def generateChapter(self, chapter):
         curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
         for idx in range(chapter[3], chapter[3] + chapter[4]):
@@ -232,7 +259,13 @@ class BookshelfWnd(QMainWindow):
         with open(self.book['source'],'r', encoding="utf-8") as fp:
             content = fp.read()
             self.lines = content.rsplit("\n")
+
+    def onPrepare(self):
+        book = BookUtils(self.book)
+        book.preparePandocSource()
+        
     def onGenerateEpub(self):
+
         book = mkepub.Book(title=self.book['title'],author=self.book['author'],
                            description=self.book['desc'],subjects=self.book['tags'])
         with open(self.book['cover'], 'rb') as file:
@@ -310,6 +343,7 @@ class BookshelfWnd(QMainWindow):
         with open('%s/shelf.csv' % self.config.getBookShelf(), 'w') as f:
             writer = csv.writer(f)
             writer.writerows(bookSummaryList)
+
     def saveBook(self, book):
         filename = '%s/%s.json' % (self.config.getBookShelf(), book['id'])
         with open(filename, 'w') as f:

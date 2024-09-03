@@ -24,6 +24,9 @@ class BookShelfConfig:
     def getTargetFile(self):
         return self.config.get('env.targetFile')
     
+    def getTargetPath(self):
+        return self.config.get('env.targetPath')
+
     def getCoverPath(self):
         return self.config.get('env.coverPath')
     
@@ -35,7 +38,7 @@ class BookShelfConfig:
     
     def getBookDB(self):
         return self.config.get('source.bookDB')
-    
+
     def getBookDBUrl(self):
         return self.config.get("source.yousuu")
     
@@ -54,11 +57,18 @@ class BookShelfConfig:
     def getTagsJson(self):
         return self.config.get('attr.tagsJson')
     
+    def getSourceList(self):
+        return self.config.get('attr.sourcesites')
+    
     def getChapterHeaderTemplate(self):
         return self.config.get('gen.chapterHeaderTemplate')
     
     def getContentLineTemplate(self):
         return self.config.get('gen.contentLineTemplate')
+    
+    def getPandocHeader(self):
+        with open(self.config.get('gen.pandocHeaderTemplate')) as fp:
+            return fp.read()
     
 if __name__ == '__main__':
     bsconfig = BookShelfConfig()

@@ -1,5 +1,6 @@
 {
    "env.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
+   "env.targetPath": "/Users/shichang/Public/books/ready/",
    "env.targetFile": "/Users/shichang/Workspace/program/data/%s.epub",
    "env.coverPath": "/Users/shichang/Workspace/program/data/cover",
    "env.cachePath": "/Users/shichang/Workspace/program/data/cache",
@@ -12,6 +13,22 @@
    "parser.textEndingList": ["（全书完）", "《全本完》"],
    "gen.chapterHeaderTemplate": "<h2 id=\"title\">%s</h2>",
    "gen.contentLineTemplate": "<p>%s</p>",
+   "gen.pandocHeaderTemplate": "/Users/shichang/Workspace/program/data/pdheader.templ",
+   "attr.sourcesites": [
+    "--",
+    "起点",
+    "17K",
+    "纵横",
+    "豆瓣",
+    "磨铁",
+    "塔读",
+    "读阅读",
+    "晋江",
+    "有毒",
+    "刺猬猫",
+    "铁血",
+    "其它"
+   ],
    "attr.tagsJson": [
         {
             "cat": "玄幻",

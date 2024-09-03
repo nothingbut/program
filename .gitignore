@@ -12,3 +12,5 @@ bun.lockb
 package-lock.json
 data/cache
 data/books
+data/cache.zip
+.gitignore
