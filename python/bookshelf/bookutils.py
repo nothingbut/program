@@ -9,6 +9,7 @@ TITLE_CHAPTER = "## "
 class BookUtils:
     def __init__(self, book = None):
         if book != None:
+            self.id = book['id']
             self.title = book['title']
             self.author = book['author']
             self.desc = book['desc']
@@ -120,7 +121,7 @@ class BookUtils:
         shutil.copy(self.coverfile, self.rootpath)
         shutil.copy(BookShelfConfig().getCSSFile(), self.rootpath)
 
-        zipfilename = BookShelfConfig().getTargetPath() + "%s-%s.zip" % (self.title, self.author)
+        zipfilename = BookShelfConfig().getTargetPath() + "%s.zip" % (self.id)
         with zipfile.ZipFile(zipfilename, "w", compression = zipfile.ZIP_DEFLATED) as zf:
             for file in Path(self.rootpath).iterdir():
                 zf.write(file, file.name)

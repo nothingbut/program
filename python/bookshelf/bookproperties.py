@@ -147,6 +147,7 @@ class BookProperties(QWidget):
         queryNovel = 'select id, title, author, brief, cover from book_novel where LB like \'0B%\' order by id'
         cursor = conn.cursor()
         cursor.execute(queryNovel)
+        count = 1
         for row in cursor:
             self.bookDict[row[0]] = {
                 'title': row[1],
@@ -154,8 +155,12 @@ class BookProperties(QWidget):
                 'cover': row[4],
                 'brief': row[3]
             }
-        self.bookIdBox.addItems(self.bookDict.keys())
+            self.bookIdBox.addItem(row[0])
+            self.bookIdBox.model().item(count, 0).setToolTip('%s - %s' % (row[1], row[2]))
+            count += 1
+
         self.bookIdBox.currentTextChanged.connect(self.refreshBook)
+        self.bookIdBox.highlighted.connect(self.showDetail)
                                                   
     def refreshBook(self):
         bookId = self.bookIdBox.currentText()
@@ -176,6 +181,9 @@ class BookProperties(QWidget):
             self.parentTag.setCurrentIndex(tagIdx[0])
             self.updateChildTag(tagIdx[0])
             self.childTag.setCurrentIndex(tagIdx[1])
+
+    def showDetail(self, idx):
+        bookId = self.bookIdBox.itemText(idx)
 
     def updateChildTag(self, index):
         self.childTag.clear()
