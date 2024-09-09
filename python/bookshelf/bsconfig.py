@@ -1,4 +1,4 @@
-import json
+import json, os
 
 class BookShelfConfig:
 
@@ -6,6 +6,7 @@ class BookShelfConfig:
 
     def __init__(self):
         self.config = self.load_config()
+        self.osname = os.name
 
     def load_config(self):
         with open(self.configFile) as f:
@@ -16,28 +17,31 @@ class BookShelfConfig:
         return self.config
     
     def getTemplateFile(self):
-        return self.config.get('env.templateFile')
+        return self.config.get('.'.join([self.osname,'env.templateFile']))
     
     def getCSSFile(self):
-        return self.config.get('env.cssFile')
+        return self.config.get('.'.join([self.osname,'env.cssFile']))
     
     def getTargetFile(self):
-        return self.config.get('env.targetFile')
+        return self.config.get('.'.join([self.osname,'env.targetFile']))
+    
+    def getSourcePath(self):
+        return self.config.get('.'.join([self.osname,'env.sourcePath']))
     
     def getTargetPath(self):
-        return self.config.get('env.targetPath')
+        return self.config.get('.'.join([self.osname,'env.targetPath']))
 
     def getCoverPath(self):
-        return self.config.get('env.coverPath')
+        return self.config.get('.'.join([self.osname,'env.coverPath']))
     
     def getCachePath(self):
-        return self.config.get('env.cachePath')
+        return self.config.get('.'.join([self.osname,'env.cachePath']))
 
     def getBookShelf(self):
-        return self.config.get('env.bookShelf')
+        return self.config.get('.'.join([self.osname,'env.bookShelf']))
     
     def getBookDB(self):
-        return self.config.get('source.bookDB')
+        return self.config.get('.'.join([self.osname,'source.bookDB']))
 
     def getBookDBUrl(self):
         return self.config.get("source.yousuu")
@@ -51,9 +55,12 @@ class BookShelfConfig:
     def getTextEndingList(self):
         return self.config.get('parser.textEndingList')
     
-    def getSourcePath(self):
-        return self.config.get('source.sourcePath')
+    def getStartString(self):
+        return self.config.get('parser.htmlStartgStr')
     
+    def getEndString(self):
+        return self.config.get('parser.htmlEndStr')
+
     def getTagsJson(self):
         return self.config.get('attr.tagsJson')
     
@@ -67,7 +74,7 @@ class BookShelfConfig:
         return self.config.get('gen.contentLineTemplate')
     
     def getPandocHeader(self):
-        with open(self.config.get('gen.pandocHeaderTemplate')) as fp:
+        with open(self.config.get('.'.join([self.osname,'gen.pandocHeaderTemplate']))) as fp:
             return fp.read()
     
 if __name__ == '__main__':

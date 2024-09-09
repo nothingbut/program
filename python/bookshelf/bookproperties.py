@@ -1,10 +1,11 @@
-import regex as re, chardet, string, sqlite3, json, requests, os, sys
-from pathlib import Path, PurePath
+import regex as re, string, sqlite3, requests, os, sys, shutil
+from pathlib import PurePath
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMenu, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
 from bsconfig import BookShelfConfig
 from enum import Enum
+from bookutils import BookUtils
 
 headers = {
     'Accept': 'application/json, text/plain, */*',
@@ -141,6 +142,40 @@ class BookProperties(QWidget):
 
     def initBookIdCombo(self):
         self.bookIdBox.addItem('000000')
+        self.bookDict = {'000000': None}
+        conn = sqlite3.connect(self.config.getBookDB())
+        queryNovel = 'select id, title, author, brief, cover from book_novel where LB like \'0B%\' order by id'
+        cursor = conn.cursor()
+        cursor.execute(queryNovel)
+        for row in cursor:
+            self.bookDict[row[0]] = {
+                'title': row[1],
+                'author': row[2],
+                'cover': row[4],
+                'brief': row[3]
+            }
+        self.bookIdBox.addItems(self.bookDict.keys())
+        self.bookIdBox.currentTextChanged.connect(self.refreshBook)
+                                                  
+    def refreshBook(self):
+        bookId = self.bookIdBox.currentText()
+        self.book['id'] = bookId
+        self.titleEdit.setText(self.bookDict[bookId]['title'])
+        self.authorEdit.setText(self.bookDict[bookId]['author'])
+        self.descEdit.setText(self.bookDict[bookId]['brief'])
+        self.coverfile = self.config.getCoverPath() + '%s.jpg' % bookId
+        if not os.path.exists(self.coverfile):
+            sourcefile = '%s%s/%s' % (self.config.getSourcePath() , bookId, self.bookDict[bookId]['cover'])
+            shutil.copyfile(sourcefile, self.coverfile)
+        image = QPixmap(self.coverfile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
+        self.coverLabel.setPixmap(image)
+        bookEntity = self.queryByName(self.titleEdit.text())
+        tags = bookEntity['tags']
+        if tags != None:
+            tagIdx = self.mapTags(bookEntity['tags'])
+            self.parentTag.setCurrentIndex(tagIdx[0])
+            self.updateChildTag(tagIdx[0])
+            self.childTag.setCurrentIndex(tagIdx[1])
 
     def updateChildTag(self, index):
         self.childTag.clear()
@@ -177,6 +212,7 @@ class BookProperties(QWidget):
                         'tags': row[5]
                     }
             except:
+                print("fail on %s" % querystr)
                 return None
 
     def autofillInfo(self):
@@ -187,7 +223,7 @@ class BookProperties(QWidget):
         self.book['id'] = '%s' % bookEntity['id']
         self.authorEdit.setText(bookEntity['author'])
         self.descEdit.setText(bookEntity['desc'])
-        self.coverfile = self.config.getCoverPath() + '/%s.jpg' % bookEntity['id']
+        self.coverfile = self.config.getCoverPath() + '%s.jpg' % bookEntity['id']
         if not os.path.exists(self.coverfile):
             with requests.get(bookEntity['cover'], stream=True) as response:
                 with open(self.coverfile, 'wb') as f:
@@ -223,22 +259,6 @@ class BookProperties(QWidget):
         self.titleEdit.setText(PurePath(self.book['filepath']).name[0:-4])
         self.autofillInfo()
 
-    def encode2utf8(self, filepath):
-        with open(filepath, 'rb') as file:
-            data = file.read(20000)
-            dicts = chardet.detect(data)
-        encode = dicts["encoding"]
-        if encode != 'utf-8' and encode != 'UTF-8-SIG':
-            if 'GB' or 'gb' in encode:
-                encode = 'gbk'
-            else:
-                pass
-            print("文件编码不是utf-8,开始转换.....")
-            with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
-                filecontent = fpr.read()
-            with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
-                fpw.write(filecontent)
-
     def importBookInfo(self):
         # check book metadata
         if self.titleEdit.text() == '' or self.authorEdit.text() == '':
@@ -250,21 +270,38 @@ class BookProperties(QWidget):
         self.book['desc'] = self.descEdit.toPlainText()
         self.book['cover'] = self.coverfile
         self.book['source'] = self.filepathEdit.text()
-        self.book['tags'] = ['%s' % self.parentTag.currentText(), '%s' % self.childTag.currentText()]
+        if self.book['source'] == '':
+            self.book['source'] = self.config.getBookDB()
+        self.book['cat'] = self.parentTag.currentText()
+        self.book['sub'] = self.childTag.currentText()
         self.book['site'] = self.sitesList.currentText()
-#        self.book['status'] = self.statusList.currentText()
+        self.book['state'] = self.statusList.currentText()
+        self.book['tags'] = ['%s' % self.book['cat'], '%s' % self.book['sub'], '%s' % self.book['site'], '%s' % self.book['state']]
 
-        # parse all chapters
-        filepath = self.book['filepath']
-        self.encode2utf8(filepath)
-        fp = open(filepath,'r', encoding="utf-8")
-        content = fp.read()
-        fp.close
+        print(self.book)
+        if self.book['source'] == self.config.getBookDB():
+            self.book['chapters'] = []
+            index = 0
+            conn = sqlite3.connect(self.config.getBookDB())
+            queryNovel = 'select id, title, volumn from book_contents where novelid = \'%s\' order by displayorder' % self.book['id']
+            cursor = conn.cursor()
+            cursor.execute(queryNovel)
+            pathsplitter = '/' if os.name == 'posix' else '\\'
+            for row in cursor:
+                self.book['chapters'].append([row[1], row[2], '%s%s%s%d.htm' % (self.config.getSourcePath(), self.book['id'], pathsplitter, row[0]), 0, -1, index])
+                index += 1
+        else:
+            # parse all chapters
+            filepath = self.book['filepath']
+            BookUtils().encode2utf8(filepath)
+            fp = open(filepath,'r', encoding="utf-8")
+            content = fp.read()
+            fp.close
 
-        lines = content.rsplit("\n")
+            lines = content.rsplit("\n")
 
-        self.book['chapters'] = self.identifyChapters(filepath, lines)
-        self.arrangeVolumns(lines)
+            self.book['chapters'] = self.identifyChapters(filepath, lines)
+            self.arrangeVolumns(lines)
 
         self.imported.emit(self.book)
         self.close()

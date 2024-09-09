@@ -16,9 +16,9 @@ headers = {
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
 }
-ids = 400000
-max = 0
-conn = sqlite3.connect('/Users/shichang/Downloads/temp/yousuu.db')
+ids = 321644
+conn = sqlite3.connect('/Users/shichang/sample.db')
+'''
 querycur = conn.cursor()
 querystr = 'select id from main.book_info where updated = False'
 querycur.execute(querystr)
@@ -49,24 +49,24 @@ finally:
     updatecur.close()
 
 print('existing is %d' % max)
-count = 0
-error = 0
+'''
+
 insertcur = conn.cursor()
 for id in range(ids):  
-    if id < max:
-        continue
 
-    if error > 100:
-        print('ending ...')
-        break
+#    result = requests.get('https://api.yousuu.com/api/book/' + str(id + 1), headers=headers).json()
+#    with open('/Users/shichang/Workspace/program/data/cache/%d.json' % (id + 1), 'w') as f:
+#        json.dump(result, f, ensure_ascii=False) 
+#    time.sleep(1)
 
-    result = requests.get('https://api.yousuu.com/api/book/' + str(id + 1), headers=headers).json()
-    with open('/Users/shichang/Workspace/program/data/cache/%d.json' % (id + 1), 'w') as f:
-        json.dump(result, f, ensure_ascii=False) 
-    time.sleep(1)
-
-    if result.get('success') != True:
-        error += 1
+#    if result.get('success') != True:
+#        error += 1
+#        continue
+    try:
+        with open('/Users/shichang/Workspace/program/data/cache/%d.json' % (id + 1), 'r') as f:
+            result = json.load(f)
+    except:
+        print("skip %d" % (id + 1))
         continue
 
     error = 0
@@ -77,25 +77,28 @@ for id in range(ids):
     tags = tags + ']'
     if book.get('introduction') == None:
         book['introduction'] = ''
-    sqlstring = 'insert into main.book_info values (%d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', NULL, True)' % (int (book.get('_id')), 
-                                                                                            book.get('title').replace('\'', '\\\t'), 
-                                                                                            book.get('author').replace('\'', '\\\t'), 
-                                                                                            book.get('cover'), 
-                                                                                            book.get('introduction').replace('\'', '’'), 
-                                                                                            tags)
+    sources = result['data']['bookSource']
+    if len(sources) > 0:
+        source = sources[0]
+    else:
+        source = {
+            'bookPage': '',
+            'siteName': ''
+        }
     try:
+        sqlstring = 'insert into book_info values (%s, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %s)' % (book.get('_id'), 
+                                                                                            book.get('title').replace('\'', '"'), 
+                                                                                            book.get('author').replace('\'', '"'), 
+                                                                                            source.get('bookPage'), book.get('cover'), 
+                                                                                            book.get('introduction').replace('\'', '"'), 
+                                                                                            tags, source.get('siteName'), book.get('status'))
+
         insertcur.execute(sqlstring)
     except:
         print('failed to execute [%s]' % sqlstring)
-        break
 
-    count = count + 1
-    if count == 100:
-        print('commit by %d' % (id - 1))
-        conn.commit()
-        count = 0
-
-    conn.commit()
-    insertcur.close()
-    conn.close()
+    print('done %d', (id + 1))
+conn.commit()
+insertcur.close()
+conn.close()
 

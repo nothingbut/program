@@ -21,7 +21,7 @@ class TOCModel(QAbstractTableModel):
     
     def columnCount(self, parent = None):
         return len(self.header)
-    
+
     def data(self, index, role):
         if not index.isValid():
             return None
@@ -56,13 +56,13 @@ class BookshelfWnd(QMainWindow):
         self.resize(1600, 1200)
 
         toolbar = self.addToolBar("Toolbar")
-        self.btImport = QAction("导入txt小说", self)
+        self.btImport = QAction("导入小说", self)
         self.btImport.triggered.connect(self.onImportText)
         toolbar.addAction(self.btImport)
-        self.btPrepare = QAction("生成Pandoc文件", self)
+        self.btPrepare = QAction("生成Pandoc", self)
         self.btPrepare.triggered.connect(self.onPrepare)
         toolbar.addAction(self.btPrepare)
-        self.btBuild = QAction("生成epub小说", self)
+        self.btBuild = QAction("生成epub", self)
         self.btBuild.triggered.connect(self.onGenerateEpub)
         toolbar.addAction(self.btBuild)
         self.btSave = QAction("保存书架", self)
@@ -161,8 +161,11 @@ class BookshelfWnd(QMainWindow):
         with open('%s/shelf.csv' % self.config.getBookShelf(), 'r') as f:
             reader = csv.reader(f)
             for item in reader:
-                book = {'id': item[0], 'title': item[1], 'tags': [item[2], item[3]], 'status': BookStatus.none}
-                self.addBook2Shelf(book)
+                book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
+                try:
+                    self.addBook2Shelf(book)
+                except:
+                    print(book)
 
     def loadBook(self, id):
         filename = '%s/%s.json' % (self.config.getBookShelf(), id)
@@ -241,7 +244,8 @@ class BookshelfWnd(QMainWindow):
 
         self.tocView.setModel(self.tocModel)
         self.book = book
-        self.preloadContent()
+        if self.book['source'] != self.config.getBookDB():
+            self.preloadContent()
 
     def clearTocModel(self):
         self.chapterList.clear()
@@ -251,8 +255,19 @@ class BookshelfWnd(QMainWindow):
 
     def generateChapter(self, chapter):
         curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
-        for idx in range(chapter[3], chapter[3] + chapter[4]):
-            curcontent.append(self.config.getContentLineTemplate() % self.lines[idx].strip())
+        if self.book['source'] != self.config.getBookDB():
+            for idx in range(chapter[3], chapter[3] + chapter[4]):
+                curcontent.append(self.config.getContentLineTemplate() % self.lines[idx].strip())
+        else:
+            sourcefile = chapter[2]
+            BookUtils().encode2utf8(sourcefile)
+            with open(sourcefile,'r', encoding="utf-8") as fp:
+                content = fp.read()
+                index = content.find(self.config.getStartString())
+                rindex = content.find(self.config.getEndString())
+                content = content[index + len(self.config.getStartString()):rindex]
+                curcontent.append(content)
+            
         return ''.join(curcontent)
 
     def preloadContent(self):
@@ -294,15 +309,14 @@ class BookshelfWnd(QMainWindow):
         self.chapterTab.setVisible(True)
 
     def addBook2Shelf(self, book):
-        tags = book['tags']
         topAmount = self.shelfView.topLevelItemCount()
         for top in range(0, topAmount):
             cat = self.shelfView.topLevelItem(top)
-            if tags[0] != cat.text(0):
+            if book['cat'] != cat.text(0):
                 continue
             childAmount = cat.childCount()
             for idx in range(0, childAmount):
-                if tags[1] == cat.child(idx).text(0):
+                if book['sub'] == cat.child(idx).text(0):
                     bookItem = QTreeWidgetItem()
                     bookItem.setText(0, book['title'])
                     bookItem.setWhatsThis(0, book['id'])
@@ -336,7 +350,8 @@ class BookshelfWnd(QMainWindow):
                 continue
             if book['status'] == BookStatus.delete:
                 continue
-            bookSummaryList.append([book['id'], book['title'], book['tags'][0], book['tags'][1]])
+            print
+            bookSummaryList.append([book['id'], book['title'], book['cat'], book['sub'], book['site'], book['state'], book['source']])
             if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
                 self.saveBook(book)
 

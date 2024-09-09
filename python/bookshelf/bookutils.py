@@ -1,8 +1,9 @@
 from bsconfig import BookShelfConfig
-import pypandoc, shutil, zipfile, sys, csv, sqlite3
+import pypandoc, shutil, zipfile, sqlite3, chardet, csv, os
 from pathlib import Path
 
 EMPTY_LINE = "\n"
+BREAK_LINE = "<br />"
 TITLE_VOLUMN = "# "
 TITLE_CHAPTER = "## "
 class BookUtils:
@@ -31,6 +32,10 @@ class BookUtils:
         pypandoc.convert_file(self.preparePandocSource(), 'epub3', outputfile=target, extra_args='--split-level=2')
 
     def preparePandocSource(self):
+        if self.source != BookShelfConfig().getBookDB():
+            type = 'file'
+        else:
+            type = 'db'
         path = Path(self.rootpath)
         if path.exists() == False:
             path.mkdir(parents=True)
@@ -44,25 +49,33 @@ class BookUtils:
             for line in description:
                 ft.write(line + EMPTY_LINE + EMPTY_LINE)
 
-            with open(self.source, 'r', encoding="utf-8") as fs:
-                content = fs.read()
-                lines = content.rsplit(EMPTY_LINE)
-                content = []
-                for chapter in chapters:
-                    if chapter[1] == 'delete':
-                        continue
-                    if withoutVolumn or chapter[1] == 'volumn':
-                        content.append(TITLE_VOLUMN + chapter[0] + EMPTY_LINE + EMPTY_LINE)
-                    else:
-                        content.append(TITLE_CHAPTER + chapter[0] + EMPTY_LINE + EMPTY_LINE)
+            content = []
+            
+            if type == 'file':
+                with open(self.source, 'r', encoding="utf-8") as fs:
+                  filecontent = fs.read()
+                  lines = filecontent.rsplit(EMPTY_LINE)
+
+            for chapter in chapters:
+                if chapter[1] == 'delete':
+                    continue
+                if withoutVolumn or chapter[1] == 'volumn':
+                    content.append(TITLE_VOLUMN + chapter[0] + EMPTY_LINE + EMPTY_LINE)
+                else:
+                    content.append(TITLE_CHAPTER + chapter[0] + EMPTY_LINE + EMPTY_LINE)
                     
-                    if chapter[3] == -1:
-                        content.append(chapter[0] + EMPTY_LINE + EMPTY_LINE)
-                        continue
+                if chapter[3] == -1:
+                    content.append(chapter[0] + EMPTY_LINE + EMPTY_LINE)
+                    continue
+                if type == 'file':
                     for idx in range(chapter[3], chapter[3] + chapter[4]):
                         content.append(lines[idx].strip() + EMPTY_LINE + EMPTY_LINE)
+                else:
+                    lines = self.readChapterLines(chapter[2])
+                    for line in lines:
+                        content.append(line.strip() + EMPTY_LINE + EMPTY_LINE)
 
-                ft.writelines(content)
+            ft.writelines(content)
 
             ft.flush()
 
@@ -114,7 +127,64 @@ class BookUtils:
 
         shutil.rmtree(self.rootpath)
 
+    def encode2utf8(self, filepath):
+        with open(filepath, 'rb') as file:
+            data = file.read(20000)
+            dicts = chardet.detect(data)
+        encode = dicts["encoding"]
+        if encode != 'utf-8' and encode != 'UTF-8-SIG':
+            if 'GB' or 'gb' in encode:
+                encode = 'gbk'
+            else:
+                pass
+            print("文件编码不是utf-8,开始转换.....")
+            with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
+                filecontent = fpr.read()
+            with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
+                fpw.write(filecontent)
+
+    def readChapterLines(self, filepath):
+        self.encode2utf8(filepath)
+        with open(filepath,'r', encoding="utf-8") as fp:
+            content = fp.read()
+            index = content.find(BookShelfConfig().getStartString())
+            rindex = content.find(BookShelfConfig().getEndString())
+            content = content[index + len(BookShelfConfig().getStartString()):rindex]
+            lines = content.rsplit(BREAK_LINE)
+
+        return lines
+
 if __name__ == '__main__':
+    print(os.name)
+'''
+    csv.field_size_limit(500 * 1024 * 1024)
+
+    conn = sqlite3.connect('/Users/shichang/sample.db')
+    cursor = conn.cursor()
+    with open('/Users/shichang/Public/Books/book_novel.csv', 'r') as fp:
+        contents = csv.reader(fp, delimiter='^')
+        for item in contents:
+            query = 'insert into book_novel values (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')' % (item[0], item[1], item[2], item[4], item[16].strip(), item[15], item[17])
+            try:
+                cursor.execute(query)
+            except:
+                print(query)
+                break
+
+    with open('/Users/shichang/Public/Books/book_NovelContent.csv', 'r') as fp:
+        contents = csv.reader(fp, delimiter='^')
+        for item in contents:
+            query = 'insert into book_contents values (%s, \'%s\', \'%s\', %s, \'%s\')' % (item[0], item[1].replace('\'', '"'), item[2], item[7], item[8].replace('\'','"'))
+            try:
+                cursor.execute(query)
+            except:
+                print(query)
+                break
+
+    cursor.close()
+    conn.commit()
+    conn.close()
+
     count = 0
     conn = sqlite3.connect('/Users/shichang/Downloads/temp/yousuu.db')
     queryNovel = 'select id, name, author from book_novel where LB like \'0B%\''
@@ -140,3 +210,4 @@ if __name__ == '__main__':
     shelfCursor.close()
     conn.close()
     print(count)
+'''
