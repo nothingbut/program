@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from bsconfig import BookShelfConfig
 from enum import Enum
 from bookutils import BookUtils
+from pathlib import Path
 
 headers = {
     'Accept': 'application/json, text/plain, */*',
@@ -40,7 +41,6 @@ class BookProperties(QWidget):
             self.book = {}
         else:
             self.book = book
-            print(self.book)
 
         self.config = BookShelfConfig()
         self.initUI()
@@ -130,6 +130,13 @@ class BookProperties(QWidget):
     def initSourceComobo(self):
         for source in self.config.getSourceList():
             self.sitesList.addItem(source)
+        conn = sqlite3.connect(self.config.getBookDB())
+        querySite = 'select source, site from book_sitemap'
+        cursor = conn.cursor()
+        cursor.execute(querySite)
+        self.sitemap = {}
+        for row in cursor:
+            self.sitemap[row[0]] = row[1]
 
     def initTagCombo(self):
         self.allTags = self.config.getTagsJson()
@@ -175,12 +182,16 @@ class BookProperties(QWidget):
         image = QPixmap(self.coverfile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
         self.coverLabel.setPixmap(image)
         bookEntity = self.queryByName(self.titleEdit.text())
+        if bookEntity == None:
+            return
+
         tags = bookEntity['tags']
         if tags != None:
             tagIdx = self.mapTags(bookEntity['tags'])
             self.parentTag.setCurrentIndex(tagIdx[0])
             self.updateChildTag(tagIdx[0])
             self.childTag.setCurrentIndex(tagIdx[1])
+        self.sitesList.setCurrentIndex(self.mapSite(bookEntity['site']))
 
     def showDetail(self, idx):
         bookId = self.bookIdBox.itemText(idx)
@@ -217,7 +228,8 @@ class BookProperties(QWidget):
                         'author': row[2],
                         'desc': row[3],
                         'cover': row[4],
-                        'tags': row[5]
+                        'tags': row[5],
+                        'site': row[6]
                     }
             except:
                 print("fail on %s" % querystr)
@@ -245,6 +257,8 @@ class BookProperties(QWidget):
         self.updateChildTag(tagIdx[0])
         self.childTag.setCurrentIndex(tagIdx[1])
 
+        self.sitesList.setCurrentIndex(self.mapSite(bookEntity['site']))
+
     def mapTags(self, input):
         tags = input.replace('[', '').replace(']','').split(', ')
         index = -1
@@ -261,6 +275,13 @@ class BookProperties(QWidget):
                 catIdx += 1
 
         return (index + 1, 0)
+
+    def mapSite(self, source):
+        site = self.sitemap[source]
+        index = self.sitesList.findText(site)
+        if index == -1:
+            index = 0
+        return index
 
     def updateFilePath(self):
         self.book['filepath'] = self.filepathEdit.text()
@@ -286,7 +307,6 @@ class BookProperties(QWidget):
         self.book['state'] = self.statusList.currentText()
         self.book['tags'] = ['%s' % self.book['cat'], '%s' % self.book['sub'], '%s' % self.book['site'], '%s' % self.book['state']]
 
-        print(self.book)
         if self.book['source'] == self.config.getBookDB():
             self.book['chapters'] = []
             index = 0
@@ -300,11 +320,14 @@ class BookProperties(QWidget):
                 index += 1
         else:
             # parse all chapters
-            filepath = self.book['filepath']
+            filepath = self.config.getSourcePath() + os.path.basename(self.book['filepath'])
+            shutil.copyfile(self.book['filepath'], filepath)
             BookUtils().encode2utf8(filepath)
+            self.book['filepath'] = filepath
+            self.book['source'] = filepath
             fp = open(filepath,'r', encoding="utf-8")
             content = fp.read()
-            fp.close
+            fp.close()
 
             lines = content.rsplit("\n")
 

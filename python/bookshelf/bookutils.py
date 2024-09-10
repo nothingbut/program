@@ -29,10 +29,6 @@ class BookUtils:
         pass
 
     def genEpubByPandoc(self):
-        target = self.rootpath + "%s-%s.epub" % (self.title, self.author)
-        pypandoc.convert_file(self.preparePandocSource(), 'epub3', outputfile=target, extra_args='--split-level=2')
-
-    def preparePandocSource(self):
         if self.source != BookShelfConfig().getBookDB():
             type = 'file'
         else:
@@ -40,10 +36,10 @@ class BookUtils:
         path = Path(self.rootpath)
         if path.exists() == False:
             path.mkdir(parents=True)
-        target = self.rootpath + "%s-%s.txt" % (self.title, self.author)
+        middle = self.rootpath + "%s-%s.md" % (self.title, self.author)
         chapters = self.orgnizeVolumns()
         withoutVolumn = (chapters[0][1] == 'delete')
-        with open(target, 'w', encoding="utf-8") as ft:
+        with open(middle, 'w', encoding="utf-8") as ft:
             ft.write(self.composePandocHeader())
             description = [EMPTY_LINE + TITLE_VOLUMN + '简介']
             description = description + self.desc.rsplit(EMPTY_LINE)
@@ -80,9 +76,10 @@ class BookUtils:
 
             ft.flush()
 
-            self.generateZipFile()
-
-            return target
+        self.generateZipFile()
+#        target = self.rootpath + "%s-%s.epub" % (self.title, self.author)
+#        pypandoc.convert_file(middle, 'epub3', outputfile=target, extra_args='--split-level=2')
+        shutil.rmtree(self.rootpath)
 
     def orgnizeVolumns(self):
         refinedChapters = []
@@ -121,12 +118,10 @@ class BookUtils:
         shutil.copy(self.coverfile, self.rootpath)
         shutil.copy(BookShelfConfig().getCSSFile(), self.rootpath)
 
-        zipfilename = BookShelfConfig().getTargetPath() + "%s.zip" % (self.id)
+        zipfilename = BookShelfConfig().getTargetPath() + "%s.%s-%s.zip" % (self.id, self.title, self.author)
         with zipfile.ZipFile(zipfilename, "w", compression = zipfile.ZIP_DEFLATED) as zf:
             for file in Path(self.rootpath).iterdir():
                 zf.write(file, file.name)
-
-        shutil.rmtree(self.rootpath)
 
     def encode2utf8(self, filepath):
         with open(filepath, 'rb') as file:

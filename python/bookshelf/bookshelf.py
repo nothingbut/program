@@ -161,7 +161,7 @@ class BookshelfWnd(QMainWindow):
         with open('%s/shelf.csv' % self.config.getBookShelf(), 'r') as f:
             reader = csv.reader(f)
             for item in reader:
-                book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
+                book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'source': item[6], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
                 try:
                     self.addBook2Shelf(book)
                 except:
@@ -277,10 +277,9 @@ class BookshelfWnd(QMainWindow):
 
     def onPrepare(self):
         book = BookUtils(self.book)
-        book.preparePandocSource()
+        book.genEpubByPandoc()
         
     def onGenerateEpub(self):
-
         book = mkepub.Book(title=self.book['title'],author=self.book['author'],
                            description=self.book['desc'],subjects=self.book['tags'])
         with open(self.book['cover'], 'rb') as file:
@@ -321,7 +320,7 @@ class BookshelfWnd(QMainWindow):
                     bookItem.setText(0, book['title'])
                     bookItem.setWhatsThis(0, book['id'])
                     cat.child(idx).addChild(bookItem)
-        
+
         self.bookList[book['id']] = book
 
     def importBook(self, book):
@@ -350,7 +349,6 @@ class BookshelfWnd(QMainWindow):
                 continue
             if book['status'] == BookStatus.delete:
                 continue
-            print
             bookSummaryList.append([book['id'], book['title'], book['cat'], book['sub'], book['site'], book['state'], book['source']])
             if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
                 self.saveBook(book)
