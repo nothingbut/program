@@ -167,7 +167,6 @@ class BookProperties(QWidget):
             count += 1
 
         self.bookIdBox.currentTextChanged.connect(self.refreshBook)
-        self.bookIdBox.highlighted.connect(self.showDetail)
                                                   
     def refreshBook(self):
         bookId = self.bookIdBox.currentText()
@@ -192,9 +191,6 @@ class BookProperties(QWidget):
             self.updateChildTag(tagIdx[0])
             self.childTag.setCurrentIndex(tagIdx[1])
         self.sitesList.setCurrentIndex(self.mapSite(bookEntity['site']))
-
-    def showDetail(self, idx):
-        bookId = self.bookIdBox.itemText(idx)
 
     def updateChildTag(self, index):
         self.childTag.clear()

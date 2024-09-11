@@ -2,7 +2,7 @@
    "posix.env.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
    "posix.env.sourcePath": "/Users/shichang/Public/books/chm/",
    "posix.env.targetPath": "/Users/shichang/Public/books/ready/",
-   "posix.env.targetFile": "/Users/shichang/Workspace/program/data/%s.epub",
+   "posix.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
    "posix.env.coverPath": "/Users/shichang/Workspace/program/data/cover/",
    "posix.env.cachePath": "/Users/shichang/Workspace/program/data/cache/",
    "posix.env.bookShelf": "/Users/shichang/Workspace/program/data/books/",

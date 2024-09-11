@@ -249,8 +249,6 @@ class BookshelfWnd(QMainWindow):
 
         self.tocView.setModel(self.tocModel)
         self.book = book
-        if self.book['source'] != self.config.getBookDB():
-            self.preloadContent()
 
     def clearTocModel(self):
         self.chapterList.clear()
@@ -258,58 +256,15 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setModel(self.tocModel)
         self.book = None
 
-    def generateChapter(self, chapter):
-        curcontent = [self.config.getChapterHeaderTemplate() % chapter[0]]
-        if self.book['source'] != self.config.getBookDB():
-            for idx in range(chapter[3], chapter[3] + chapter[4]):
-                curcontent.append(self.config.getContentLineTemplate() % self.lines[idx].strip())
-        else:
-            sourcefile = chapter[2]
-            BookUtils().encode2utf8(sourcefile)
-            with open(sourcefile,'r', encoding="utf-8") as fp:
-                content = fp.read()
-                index = content.find(self.config.getStartString())
-                rindex = content.find(self.config.getEndString())
-                content = content[index + len(self.config.getStartString()):rindex]
-                curcontent.append(content)
-            
-        return ''.join(curcontent)
-
-    def preloadContent(self):
-        with open(self.book['source'],'r', encoding="utf-8") as fp:
-            content = fp.read()
-            self.lines = content.rsplit("\n")
-
     def packageBook(self):
-        book = BookUtils(self.book)
-        book.genEpubByPandoc()
+        BookUtils(self.book).packageBook()
         
     def generateEpub(self):
-        book = mkepub.Book(title=self.book['title'],author=self.book['author'],
-                           description=self.book['desc'],subjects=self.book['tags'])
-        with open(self.book['cover'], 'rb') as file:
-            book.set_cover(file.read())
-
-        with open(self.config.getCSSFile()) as file:
-            book.set_stylesheet(file.read())
-
-        volpage = None
-        for chapter in self.chapterList:
-            if chapter[1] == 'delete':
-                continue
-            curcontent = self.generateChapter(chapter)
-
-            if chapter[1] == 'volumn':
-                volpage = book.add_page(chapter[0], curcontent)
-                continue
-            book.add_page(chapter[0], curcontent, volpage)
-
-        targetfile = self.config.getTargetFile() % book.title
-        book.save(targetfile)
+        BookUtils(self.book).generateEpub()
 
     def showChapterContent(self):
         chapter = self.chapterList[self.tocModel.rawIndex(self.tocView.currentIndex().row())]
-        self.chapterTab.setHtml(self.generateChapter(chapter))
+        self.chapterTab.setHtml(BookUtils(self.book).generateChapter(chapter))
         self.chapterTab.setVisible(True)
 
     def addBook2Shelf(self, book):

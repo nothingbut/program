@@ -1,6 +1,7 @@
 from bsconfig import BookShelfConfig
-import pypandoc, shutil, zipfile, sqlite3, chardet, csv, os
+import mkepub, shutil, zipfile, chardet, os
 from pathlib import Path
+#import sqlite3, csv
 
 EMPTY_LINE = "\n"
 BREAK_LINE = "<br />"
@@ -18,6 +19,7 @@ class BookUtils:
             self.source = book['source']
             self.chapters = book['chapters']
             self.rootpath = BookShelfConfig().getTargetPath() + "%s-%s/" % (self.title, self.author)
+            self.lines = None
 
     def loadFromDBSource(self, id):
         pass
@@ -25,34 +27,61 @@ class BookUtils:
     def loadFromPandocSource(self, source):
         pass
 
-    def genEpubByMkepub(self):
-        pass
+    def getChapterLines(self, chapter):
+        if self.source == BookShelfConfig().getBookDB():
+            filepath = chapter[2]
+            self.encode2utf8(filepath)
+            with open(filepath,'r', encoding="utf-8") as fp:
+                content = fp.read()
+                index = content.find(BookShelfConfig().getStartString())
+                rindex = content.find(BookShelfConfig().getEndString())
+                content = content[index + len(BookShelfConfig().getStartString()):rindex]
+                return content.rsplit(BREAK_LINE)
 
-    def genEpubByPandoc(self):
-        if self.source != BookShelfConfig().getBookDB():
-            type = 'file'
-        else:
-            type = 'db'
+        if self.lines == None:
+            with open(self.source, 'r', encoding="utf-8") as fp:
+                content = fp.read()
+                self.lines = content.rsplit("\n")
+
+        return self.lines[chapter[3] : chapter[3] + chapter[4]]
+
+    def generateEpub(self):
+        book = mkepub.Book(title=self.title, author=self.author, description=self.desc, subjects=self.tags)
+        with open(self.coverfile, 'rb') as file:
+            book.set_cover(file.read())
+
+        with open(BookShelfConfig().getCSSFile()) as file:
+            book.set_stylesheet(file.read())
+
+        chapters = self.orgnizeVolumns()
+        withoutVolumn = (chapters[0][1] == 'delete')
+        for chapter in chapters:
+            if chapter[1] == 'delete':
+                continue
+            content = self.generateChapter(chapter)
+            if withoutVolumn or chapter[1] == 'volumn':
+                curVolumn = book.add_page(chapter[0], content)
+            else:
+                book.add_page(chapter[0], content, curVolumn)
+
+        target = BookShelfConfig().getTargetFile() % book.title
+        book.save(target)
+
+    def packageBook(self):
         path = Path(self.rootpath)
         if path.exists() == False:
             path.mkdir(parents=True)
-        middle = self.rootpath + "%s-%s.md" % (self.title, self.author)
+        target = self.rootpath + "%s-%s.md" % (self.title, self.author)
         chapters = self.orgnizeVolumns()
         withoutVolumn = (chapters[0][1] == 'delete')
-        with open(middle, 'w', encoding="utf-8") as ft:
+        with open(target, 'w', encoding="utf-8") as ft:
             ft.write(self.composePandocHeader())
             description = [EMPTY_LINE + TITLE_VOLUMN + '简介']
             description = description + self.desc.rsplit(EMPTY_LINE)
             for line in description:
                 ft.write(line + EMPTY_LINE + EMPTY_LINE)
-
-            content = []
             
-            if type == 'file':
-                with open(self.source, 'r', encoding="utf-8") as fs:
-                  filecontent = fs.read()
-                  lines = filecontent.rsplit(EMPTY_LINE)
-
+            content = []
             for chapter in chapters:
                 if chapter[1] == 'delete':
                     continue
@@ -64,21 +93,16 @@ class BookUtils:
                 if chapter[3] == -1:
                     content.append(chapter[0] + EMPTY_LINE + EMPTY_LINE)
                     continue
-                if type == 'file':
-                    for idx in range(chapter[3], chapter[3] + chapter[4]):
-                        content.append(lines[idx].strip() + EMPTY_LINE + EMPTY_LINE)
-                else:
-                    lines = self.readChapterLines(chapter[2])
-                    for line in lines:
-                        content.append(line.strip() + EMPTY_LINE + EMPTY_LINE)
+
+                lines = self.getChapterLines(chapter)
+                for line in lines:
+                    content.append(line.strip() + EMPTY_LINE + EMPTY_LINE)
 
             ft.writelines(content)
 
             ft.flush()
 
         self.generateZipFile()
-#        target = self.rootpath + "%s-%s.epub" % (self.title, self.author)
-#        pypandoc.convert_file(middle, 'epub3', outputfile=target, extra_args='--split-level=2')
         shutil.rmtree(self.rootpath)
 
     def orgnizeVolumns(self):
@@ -123,6 +147,16 @@ class BookUtils:
             for file in Path(self.rootpath).iterdir():
                 zf.write(file, file.name)
 
+    def generateChapter(self, chapter):
+        curcontent = [BookShelfConfig().getChapterHeaderTemplate() % chapter[0]]
+        lines = self.getChapterLines(chapter)
+
+        for line in lines:
+            line = line.strip()
+            curcontent.append(BookShelfConfig().getContentLineTemplate() % line)
+
+        return ''.join(curcontent)
+
     def encode2utf8(self, filepath):
         with open(filepath, 'rb') as file:
             data = file.read(20000)
@@ -133,22 +167,10 @@ class BookUtils:
                 encode = 'gbk'
             else:
                 pass
-            print("文件编码不是utf-8,开始转换.....")
             with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
                 filecontent = fpr.read()
             with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
                 fpw.write(filecontent)
-
-    def readChapterLines(self, filepath):
-        self.encode2utf8(filepath)
-        with open(filepath,'r', encoding="utf-8") as fp:
-            content = fp.read()
-            index = content.find(BookShelfConfig().getStartString())
-            rindex = content.find(BookShelfConfig().getEndString())
-            content = content[index + len(BookShelfConfig().getStartString()):rindex]
-            lines = content.rsplit(BREAK_LINE)
-
-        return lines
 
 if __name__ == '__main__':
     print(os.name)
