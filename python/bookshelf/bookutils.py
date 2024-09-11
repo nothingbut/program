@@ -1,5 +1,5 @@
 from bsconfig import BookShelfConfig
-import mkepub, shutil, zipfile, chardet, os
+import mkepub, shutil, zipfile, chardet, os, yaml
 from pathlib import Path
 #import sqlite3, csv
 
@@ -133,10 +133,18 @@ class BookUtils:
         return refinedChapters
 
     def composePandocHeader(self):
-        header = BookShelfConfig().getPandocHeader()
         coverfile = self.coverfile.rsplit('/')[-1]
         cssfile = BookShelfConfig().getCSSFile().rsplit('/')[-1]
-        return header.replace('$title$', self.title).replace('$author$', self.author).replace('$coverfile$', coverfile).replace('$tags$', self.tags).replace('$cssfile$', cssfile)
+        header = {
+            'title': self.title,
+            'author': self.author,
+            'subject': self.tags,
+            'publisher': 'nothingbut',
+            'cover-image': coverfile,
+            'css': cssfile,
+            'description': self.desc
+        }
+        return BookShelfConfig().getPandocHeader().replace('$header$', yaml.dump(header, allow_unicode=True))
 
     def generateZipFile(self):
         shutil.copy(self.coverfile, self.rootpath)
