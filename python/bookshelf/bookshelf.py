@@ -1,6 +1,6 @@
 import sys, mkepub, json, csv
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem, QInputDialog
-from PySide6.QtGui import QAction, QCursor
+from PySide6.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem, QInputDialog
+from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtCore import Qt, QAbstractTableModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from bookproperties import BookProperties, BookStatus
@@ -59,12 +59,6 @@ class BookshelfWnd(QMainWindow):
         self.btImport = QAction("导入小说", self)
         self.btImport.triggered.connect(self.onImportText)
         toolbar.addAction(self.btImport)
-        self.btPrepare = QAction("生成Pandoc", self)
-        self.btPrepare.triggered.connect(self.onPrepare)
-        toolbar.addAction(self.btPrepare)
-        self.btBuild = QAction("生成epub", self)
-        self.btBuild.triggered.connect(self.onGenerateEpub)
-        toolbar.addAction(self.btBuild)
         self.btSave = QAction("保存书架", self)
         self.btSave.triggered.connect(self.onSaveShelf)        
         toolbar.addAction(self.btSave)
@@ -149,10 +143,16 @@ class BookshelfWnd(QMainWindow):
         if item.whatsThis(0) == None or item.whatsThis(0) == '':
             return
         popMenu = QMenu(self)
+
         self.modifyMetaAction = popMenu.addAction('修改')
         self.modifyMetaAction.triggered.connect(self.modifyMeta)
         self.deleteBookAction = popMenu.addAction('删除')
         self.deleteBookAction.triggered.connect(self.deleteBook)
+        self.packageBookAction = popMenu.addAction('打包')
+        self.packageBookAction.triggered.connect(self.packageBook)
+        self.generateBookAction = popMenu.addAction('生成')
+        self.generateBookAction.triggered.connect(self.generateEpub)
+        
         popMenu.exec(QCursor.pos())
  
     def loadShelf(self):
@@ -222,8 +222,13 @@ class BookshelfWnd(QMainWindow):
         selections = self.tocView.selectedIndexes()
         start = self.tocModel.rawIndex(selections[0].row())
         end = self.tocModel.rawIndex(selections[-1].row())
+        original = self.chapterList[start][1]
         for i in range(end, start - 1, -1):
             self.chapterList[i][1] = volumn
+        if start > 0:
+            previous = self.chapterList[start - 1]
+            if previous[1] == 'volumn' and previous[0] == original:
+                previous[0] = volumn
         self.tocModel = TOCModel(self, self.chapterList)
         self.tocView.setModel(self.tocModel)
         self.tocView.setColumnHidden(5, True)        
@@ -275,11 +280,11 @@ class BookshelfWnd(QMainWindow):
             content = fp.read()
             self.lines = content.rsplit("\n")
 
-    def onPrepare(self):
+    def packageBook(self):
         book = BookUtils(self.book)
         book.genEpubByPandoc()
         
-    def onGenerateEpub(self):
+    def generateEpub(self):
         book = mkepub.Book(title=self.book['title'],author=self.book['author'],
                            description=self.book['desc'],subjects=self.book['tags'])
         with open(self.book['cover'], 'rb') as file:
@@ -367,6 +372,11 @@ class BookshelfWnd(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     mainWnd = BookshelfWnd()
+    icon = QIcon("/Users/shichang/workspace/program/data/bookshelf.png")
+    mainWnd.setWindowIcon(icon)
+    tray = QSystemTrayIcon()
+    tray.setIcon(icon)
+    tray.setVisible(True)
     mainWnd.show()
     sys.exit(app.exec()) 
 
