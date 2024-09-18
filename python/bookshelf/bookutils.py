@@ -4,7 +4,7 @@ from pathlib import Path
 #import sqlite3, csv
 
 EMPTY_LINE = "\n"
-BREAK_LINE = "<br />|<br >"
+BREAK_LINE = "<br />|<br >|<br>"
 TITLE_VOLUMN = "# "
 TITLE_CHAPTER = "## "
 class BookUtils:

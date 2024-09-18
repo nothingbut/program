@@ -279,6 +279,7 @@ class BookProperties(QWidget):
         self.fillBookFields()
  
     def mapTags(self, tags):
+        logging.debug("current tags are %s" % tags)
         index = -1
         for tag in tags:
             catIdx = 0
@@ -457,7 +458,7 @@ if __name__ == '__main__':
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
     logging.basicConfig(filename='bsprop.log', level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
 
-    filename = '%s/%s.json' % (BookShelfConfig().getBookShelf(), '000003')
+    filename = '%s/%s.json' % (BookShelfConfig().getBookShelf(), '000132')
     with open(filename, 'r') as f:
         book = json.load(f)
 
