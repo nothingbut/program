@@ -1,10 +1,10 @@
 from bsconfig import BookShelfConfig
-import mkepub, shutil, zipfile, chardet, os, yaml, logging
+import mkepub, shutil, zipfile, chardet, os, yaml, logging, re
 from pathlib import Path
 #import sqlite3, csv
 
 EMPTY_LINE = "\n"
-BREAK_LINE = "<br />"
+BREAK_LINE = "<br />|<br >"
 TITLE_VOLUMN = "# "
 TITLE_CHAPTER = "## "
 class BookUtils:
@@ -33,7 +33,7 @@ class BookUtils:
                 index = content.find(BookShelfConfig().getStartString())
                 rindex = content.find(BookShelfConfig().getEndString())
                 content = content[index + len(BookShelfConfig().getStartString()):rindex]
-                return content.rsplit(BREAK_LINE)
+                return re.split(BREAK_LINE, content)
 
         if self.lines == None:
             with open(self.source, 'r', encoding="utf-8") as fp:
