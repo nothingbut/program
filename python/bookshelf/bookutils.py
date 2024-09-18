@@ -1,5 +1,5 @@
 from bsconfig import BookShelfConfig
-import mkepub, shutil, zipfile, chardet, os, yaml
+import mkepub, shutil, zipfile, chardet, os, yaml, logging
 from pathlib import Path
 #import sqlite3, csv
 
@@ -181,7 +181,10 @@ class BookUtils:
                 fpw.write(filecontent)
 
 if __name__ == '__main__':
-    print(os.name)
+    LOG_FORMAT = "[%(filename)s:<%(lineno)d>] %(asctime)s - %(levelname)s - %(message)s"
+    DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
+    logging.basicConfig(filename='bsutil.log', level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
+    logging.debug(os.name)
 '''
     csv.field_size_limit(500 * 1024 * 1024)
 

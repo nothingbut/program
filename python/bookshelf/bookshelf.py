@@ -1,4 +1,4 @@
-import sys, mkepub, json, csv
+import sys, logging, json, csv
 from PySide6.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QSplitter, QTreeWidget, QTableView, QHeaderView, QStatusBar, QTreeWidgetItem, QInputDialog
 from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtCore import Qt, QAbstractTableModel
@@ -40,12 +40,8 @@ class TOCModel(QAbstractTableModel):
 class BookshelfWnd(QMainWindow):
     def __init__(self,parent=None):
         super(BookshelfWnd, self).__init__(parent)
-        self.initConfig()
         self.initModel()
         self.initUI(parent)
-
-    def initConfig(self):
-        self.config = BookShelfConfig()
 
     def initModel(self):
         self.chapterList = list()
@@ -119,7 +115,7 @@ class BookshelfWnd(QMainWindow):
     def initTagTree(self):
         self.shelfView.setColumnCount(1)
         self.shelfView.setHeaderLabels(['书架'])
-        allTags = self.config.getTagsJson()
+        allTags = BookShelfConfig().getTagsJson()
         for top in allTags:
             topItem = QTreeWidgetItem(self.shelfView)
             topItem.setText(0, top['cat'])
@@ -158,7 +154,7 @@ class BookshelfWnd(QMainWindow):
     def loadShelf(self):
         self.bookList = {'-1': None}
         self.curBook = '-1'
-        with open('%s/shelf.csv' % self.config.getBookShelf(), 'r') as f:
+        with open('%s/shelf.csv' % BookShelfConfig().getBookShelf(), 'r') as f:
             reader = csv.reader(f)
             for item in reader:
                 book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'source': item[6], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
@@ -168,7 +164,7 @@ class BookshelfWnd(QMainWindow):
                     print(book)
 
     def loadBook(self, id):
-        filename = '%s/%s.json' % (self.config.getBookShelf(), id)
+        filename = '%s/%s.json' % (BookShelfConfig().getBookShelf(), id)
         with open(filename, 'r') as f:
             book = json.load(f)
             book['status'] = BookStatus.load
@@ -261,6 +257,7 @@ class BookshelfWnd(QMainWindow):
         
     def generateEpub(self):
         BookUtils(self.book).generateEpub()
+        return
 
     def showChapterContent(self):
         chapter = self.chapterList[self.tocModel.rawIndex(self.tocView.currentIndex().row())]
@@ -285,6 +282,7 @@ class BookshelfWnd(QMainWindow):
 
     def importBook(self, book):
         book['status'] = BookStatus.new
+        logging.debug(book)
         self.addBook2Shelf(book)
         self.refreshTocModel(book)
 
@@ -313,18 +311,22 @@ class BookshelfWnd(QMainWindow):
             if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
                 self.saveBook(book)
 
-        with open('%s/shelf.csv' % self.config.getBookShelf(), 'w') as f:
+        with open('%s/shelf.csv' % BookShelfConfig().getBookShelf(), 'w') as f:
             writer = csv.writer(f)
             writer.writerows(bookSummaryList)
 
     def saveBook(self, book):
-        filename = '%s/%s.json' % (self.config.getBookShelf(), book['id'])
+        filename = '%s/%s.json' % (BookShelfConfig().getBookShelf(), book['id'])
         with open(filename, 'w') as f:
             book['status'] = None
             json.dump(book, f, ensure_ascii=False)
             book['status'] = BookStatus.load
 
 def main():
+    LOG_FORMAT = "[%(filename)s:<%(lineno)d>] %(asctime)s - %(levelname)s - %(message)s"
+    DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
+    logging.basicConfig(filename='bsapp.log', level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
+
     app = QApplication(sys.argv)
     mainWnd = BookshelfWnd()
     icon = QIcon("/Users/shichang/workspace/program/data/bookshelf.png")
