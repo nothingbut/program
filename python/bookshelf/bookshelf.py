@@ -230,7 +230,6 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setColumnHidden(5, True)        
 
     def onImportText(self, checked):
-        # Code to import book text file
         self.bookProperties = BookProperties()
         self.bookProperties.show()
         self.bookProperties.imported.connect(self.importBook)
@@ -257,7 +256,6 @@ class BookshelfWnd(QMainWindow):
         
     def generateEpub(self):
         BookUtils(self.book).generateEpub()
-        return
 
     def showChapterContent(self):
         chapter = self.chapterList[self.tocModel.rawIndex(self.tocView.currentIndex().row())]

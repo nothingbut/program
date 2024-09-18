@@ -21,9 +21,6 @@ class BookUtils:
             self.rootpath = BookShelfConfig().getTargetPath() + "%s-%s/" % (self.title, self.author)
             self.lines = None
 
-    def loadFromDBSource(self, id):
-        pass
-
     def loadFromPandocSource(self, source):
         pass
 
