@@ -15,7 +15,7 @@
    "win.env.coverPath": "/Users/shichang/Workspace/program/data/cover",
    "win.env.cachePath": "/Users/shichang/Workspace/program/data/cache",
    "win.env.bookShelf": "/Users/shichang/Workspace/program/data/books",
-   "win.source.bookDB": "/Users/shichang/sample.db",
+   "win.source.bookDB": "/Users/shichang/Public/Books/sample.db",
 
    "source.yousuu": "https://api.yousuu.com/api/book/%s",
    "source.bookDetailQuery": "select id, title, author, brief, cover, tags, site, state from main.book_info where title = \"%s\"",
