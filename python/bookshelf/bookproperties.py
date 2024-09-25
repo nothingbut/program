@@ -34,8 +34,13 @@ class BookStatus(Enum):
 class BookProperties(QWidget):
     imported = Signal(dict)
 
-    def __init__(self, book = None):
+    def __init__(self, *, book=None, blacklist = None):
         super().__init__()
+
+        if blacklist is None:
+            self.blacklist = []
+        else:
+            self.blacklist = blacklist
 
         self.initUI()
 
@@ -44,6 +49,7 @@ class BookProperties(QWidget):
         else:
             self.book = book
             self.fillBookFields()
+
 
     def initUI(self):
         self.resize(400, 300)
@@ -156,6 +162,9 @@ class BookProperties(QWidget):
         cursor.execute(queryNovel)
         count = 1
         for row in cursor:
+            if row[0] in self.blacklist:
+                continue
+
             self.bookDict[row[0]] = {
                 'title': row[1],
                 'author': row[2],
@@ -176,18 +185,23 @@ class BookProperties(QWidget):
         self.descEdit.setText(self.book['desc'])
         self.bookIdBox.setCurrentIndex(self.mapId(id))
 
-        tagIdx = self.mapTags(self.book['tags'])
-        self.parentTag.setCurrentIndex(tagIdx[0])
-        self.updateChildTag(tagIdx[0])
-        self.childTag.setCurrentIndex(tagIdx[1])
+        if 'tags' in self.book.keys():
+            tagIdx = self.mapTags(self.book['tags'])
+            self.parentTag.setCurrentIndex(tagIdx[0])
+            self.updateChildTag(tagIdx[0])
+            self.childTag.setCurrentIndex(tagIdx[1])
 
-        self.sitesList.setCurrentIndex(self.mapSite(self.book['site']))
-        self.statusList.setCurrentIndex(self.mapState(self.book['state']))
+        if 'site' in self.book.keys():
+            self.sitesList.setCurrentIndex(self.mapSite(self.book['site']))
+        if 'state' in self.book.keys():
+            self.statusList.setCurrentIndex(self.mapState(self.book['state']))
 
-        if self.book['cover'] != None:
-            logging.debug(self.coverLabel.size())
-            image = QPixmap(self.book['cover']).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
-            self.coverLabel.setPixmap(image)
+        if ('cover' in self.book.keys()) and (self.book['cover'] != None):
+            try :
+                image = QPixmap(self.book['cover']).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
+                self.coverLabel.setPixmap(image)
+            except:
+                logging.error('load image error for %s' % self.book['cover'])
         
     def refreshBook(self):
         bookId = self.bookIdBox.currentText()
@@ -363,7 +377,6 @@ class BookProperties(QWidget):
             cursor.execute(queryNovel)
             pathsplitter = '/' if os.name == 'posix' else '\\'
             for row in cursor:
-                logging.debug(row)
                 self.book['chapters'].append([row[1], row[2], '%s%s%s%d.htm' % (BookShelfConfig().getSourcePath(), self.book['id'], pathsplitter, row[0]), 0, -1, index])
                 index += 1
         else:
@@ -463,6 +476,6 @@ if __name__ == '__main__':
         book = json.load(f)
 
     app = QApplication(sys.argv)
-    bookProperties = BookProperties(book)
+    bookProperties = BookProperties(book=book, blacklist = ['000001','000002'])
     bookProperties.show()
     sys.exit(app.exec()) 

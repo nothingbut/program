@@ -42,6 +42,8 @@ class BookshelfWnd(QMainWindow):
         super(BookshelfWnd, self).__init__(parent)
         self.initModel()
         self.initUI(parent)
+        self.cat = None
+        self.sub = None
 
     def initModel(self):
         self.chapterList = list()
@@ -108,6 +110,7 @@ class BookshelfWnd(QMainWindow):
 
         self.initTagTree()
         self.shelfView.itemClicked.connect(self.onSelectBook)
+        self.shelfView.itemExpanded.connect(self.expandCurrent)
         self.setCentralWidget(self.mainSplitter)
 
         self.loadShelf()
@@ -134,9 +137,9 @@ class BookshelfWnd(QMainWindow):
 
     def showTreeItemMenu(self, pos):
         item = self.shelfView.currentItem()
-        if item == None:
+        if item is None:
             return
-        if item.whatsThis(0) == None or item.whatsThis(0) == '':
+        if item.whatsThis(0) is None or item.whatsThis(0) == '':
             return
         popMenu = QMenu(self)
 
@@ -174,7 +177,7 @@ class BookshelfWnd(QMainWindow):
         item = self.shelfView.currentItem()
         id = item.whatsThis(0)
         book = self.bookList[id]
-        self.bookProperties = BookProperties(book)
+        self.bookProperties = BookProperties(book=book)
         self.bookProperties.show()
 
     def deleteBook(self):
@@ -230,7 +233,7 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setColumnHidden(5, True)        
 
     def onImportText(self, checked):
-        self.bookProperties = BookProperties()
+        self.bookProperties = BookProperties(blacklist=self.bookList.keys())
         self.bookProperties.show()
         self.bookProperties.imported.connect(self.importBook)
 
@@ -276,12 +279,21 @@ class BookshelfWnd(QMainWindow):
                     bookItem.setWhatsThis(0, book['id'])
                     cat.child(idx).addChild(bookItem)
 
+                    bookItem.childCount()
+
         self.bookList[book['id']] = book
+        return bookItem
 
     def importBook(self, book):
         book['status'] = BookStatus.new
-        logging.debug(book)
-        self.addBook2Shelf(book)
+        item = self.addBook2Shelf(book)
+        last = self.updateCurentShelf(item.parent())
+        if last is not None:
+            logging.debug('item %s need to be collapsed' % last.text(0))
+            self.collapseItem(last)
+
+#        self.shelfView.expandItem(item.parent())
+        self.shelfView.setCurrentItem(item)
         self.refreshTocModel(book)
 
     def onSelectBook(self, item, column):
@@ -293,6 +305,52 @@ class BookshelfWnd(QMainWindow):
             self.loadBook(self.curBook)
         self.refreshTocModel(self.bookList[self.curBook])
 
+    def expandCurrent(self, item):
+        last = self.updateCurentShelf(item)
+        if last is not None:
+            self.collapseItem(last)
+
+        item.setExpanded(True)
+
+    def collapseItem(self, item):
+        for idx in range(item.childCount()):
+            child = item.child(idx)
+            if child.isExpanded():
+                logging.debug('collapse %s ...' % child.text(0))
+                self.shelfView.collapseItem(child)
+
+        self.shelfView.collapseItem(item)
+
+    def updateCurentShelf(self, item):
+        logging.debug('update to %s' % item.text(0))
+        if item.parent() is None:
+            cat = item
+            sub = None
+        else:
+            sub = item
+            cat = item.parent()
+
+        if cat == self.cat and sub is None:
+            return None
+        if sub == self.sub and sub is not None:
+            return None
+        returnItem = self.sub
+        self.sub = sub
+        if cat == self.cat:
+            if self.sub is None:
+                return None
+            if returnItem is not None:
+                logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.sub.text(0)))
+
+            return returnItem
+        
+        returnItem = self.cat
+        self.cat = cat
+        if returnItem is not None:
+            logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.cat.text(0)))
+
+        return returnItem
+
     def onSaveShelf(self):
         self.saveBookList()
 
@@ -301,7 +359,7 @@ class BookshelfWnd(QMainWindow):
         bookSummaryList = list()
         for id in allBookIds:
             book = self.bookList[id]
-            if book == None:
+            if book is None:
                 continue
             if book['status'] == BookStatus.delete:
                 continue
@@ -325,6 +383,7 @@ def main():
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
     logging.basicConfig(filename='bsapp.log', level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
 
+    logging.info("Start application .....")
     app = QApplication(sys.argv)
     mainWnd = BookshelfWnd()
     icon = QIcon("/Users/shichang/workspace/program/data/bookshelf.png")
