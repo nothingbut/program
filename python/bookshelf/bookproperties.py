@@ -34,8 +34,10 @@ class BookStatus(Enum):
 class BookProperties(QWidget):
     imported = Signal(dict)
 
-    def __init__(self, *, book=None, blacklist = None):
+    def __init__(self, *, book=None, blacklist = None, debug = False):
         super().__init__()
+
+        self.isDebug = debug
 
         if blacklist is None:
             self.blacklist = []
@@ -48,8 +50,10 @@ class BookProperties(QWidget):
             self.book = {}
         else:
             self.book = book
-            self.fillBookFields()
+            BookUtils(book).dumpBookMeta()
+            self.fillFormFields()
 
+            self.disableChangeSource()
 
     def initUI(self):
         self.resize(400, 300)
@@ -66,12 +70,12 @@ class BookProperties(QWidget):
         self.authorEdit = QLineEdit()
         self.basicInfo.addWidget(self.authorEdit, 1, 1)
         self.openFileBnt = QPushButton("...")
-        self.openFileBnt.clicked.connect(self.openFile)
+        self.openFileBnt.clicked.connect(self.onFileOpen)
         self.basicInfo.addWidget(self.openFileBnt, 2, 0)
         self.sourceInfo = QHBoxLayout()
         self.filepathEdit = QLineEdit()
         self.filepathEdit.setReadOnly(True)
-        self.filepathEdit.textChanged.connect(self.updateFilePath)
+        self.filepathEdit.textChanged.connect(self.onFilepathUpdate)
         self.sourceInfo.addWidget(self.filepathEdit)
         self.bookIdBox = QComboBox(self)
         self.sourceInfo.addWidget(self.bookIdBox)
@@ -106,11 +110,11 @@ class BookProperties(QWidget):
 
         self.actionPanel = QHBoxLayout()
         self.autoFill = QPushButton("O")
-        self.autoFill.clicked.connect(self.autofillInfo)
+        self.autoFill.clicked.connect(self.onRefreshFromDB)
         self.cancel = QPushButton("取消")
         self.cancel.clicked.connect(self.close)
         self.importBook = QPushButton("确定")
-        self.importBook.clicked.connect(self.importBookInfo)
+        self.importBook.clicked.connect(self.onBookImport)
 
         self.actionPanel.addWidget(self.autoFill)
         self.actionPanel.addWidget(self.cancel)
@@ -126,12 +130,18 @@ class BookProperties(QWidget):
 
         self.coverMenu = QMenu(self)
         actionLoadCover = self.coverMenu.addAction("打开本地文件")
-        actionLoadCover.triggered.connect(self.openCoverFile)
+        actionLoadCover.triggered.connect(self.onCoverFileOpen)
         actionGenCover = self.coverMenu.addAction("生成默认封面")
-        actionGenCover.triggered.connect(self.genDefaultCover)
+        actionGenCover.triggered.connect(self.onDefaultCoverGen)
 
         self.coverLabel.setContextMenuPolicy(Qt.CustomContextMenu)
         self.coverLabel.customContextMenuRequested.connect(self.showCoverMenu)
+
+    def disableChangeSource(self):
+        self.openFileBnt.setDisabled(True)
+        self.filepathEdit.setDisabled(True)
+        if not self.isDebug:
+            self.bookIdBox.setDisabled(True)
 
     def initSourceComobo(self):
         for source in BookShelfConfig().getSourceList():
@@ -151,7 +161,7 @@ class BookProperties(QWidget):
         for parent in self.allTags:
             self.parentTag.addItem(parent['cat'])
         self.childTag.addItem('--')
-        self.parentTag.activated.connect(self.updateChildTag)
+        self.parentTag.activated.connect(self.onChildTagUpdate)
 
     def initBookIdCombo(self):
         self.bookIdBox.addItem('000000')
@@ -175,9 +185,11 @@ class BookProperties(QWidget):
             self.bookIdBox.model().item(count, 0).setToolTip('%s - %s' % (row[1], row[2]))
             count += 1
 
-        self.bookIdBox.currentTextChanged.connect(self.refreshBook)
+        self.bookIdBox.currentTextChanged.connect(self.onBookRefresh)
 
-    def fillBookFields(self):
+    def fillFormFields(self):
+        logging.debug('Invoking fillFormFields ...')
+
         id = self.book['id']
         self.filepathEdit.setText(self.book['source'])
         self.titleEdit.setText(self.book['title'])
@@ -188,7 +200,7 @@ class BookProperties(QWidget):
         if 'tags' in self.book.keys():
             tagIdx = self.mapTags(self.book['tags'])
             self.parentTag.setCurrentIndex(tagIdx[0])
-            self.updateChildTag(tagIdx[0])
+            self.onChildTagUpdate(tagIdx[0])
             self.childTag.setCurrentIndex(tagIdx[1])
 
         if 'site' in self.book.keys():
@@ -197,14 +209,20 @@ class BookProperties(QWidget):
             self.statusList.setCurrentIndex(self.mapState(self.book['state']))
 
         if ('cover' in self.book.keys()) and (self.book['cover'] != None):
+            self.coverfile = self.book['cover']
             try :
                 image = QPixmap(self.book['cover']).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
                 self.coverLabel.setPixmap(image)
             except:
                 logging.error('load image error for %s' % self.book['cover'])
         
-    def refreshBook(self):
+    def onBookRefresh(self):
+        logging.debug('Invoking onBookRefresh ...')
+
         bookId = self.bookIdBox.currentText()
+        if bookId == self.book['id']:
+            return
+        
         self.book['id'] = bookId
         self.book['title'] = self.bookDict[bookId]['title']
         self.book['author'] = self.bookDict[bookId]['author']
@@ -225,11 +243,13 @@ class BookProperties(QWidget):
             self.book['tags'] = bookEntity['tags'].replace('[', '').replace(']','').split(', ')
             self.book['site'] = bookEntity['site']
             self.book['state'] = bookEntity['state']
-        self.fillBookFields()
 
-    def updateChildTag(self, index):
+        self.fillFormFields()
+
+    def onChildTagUpdate(self, index):
+        logging.debug('Invoking onChildTagUpdate ...')
+
         self.childTag.clear()
-
         self.childTag.addItem('--')
         for child in self.allTags[index - 1]['sub']:
             self.childTag.addItem(child)
@@ -237,16 +257,18 @@ class BookProperties(QWidget):
     def showCoverMenu(self, pos):
         self.coverMenu.exec(self.coverLabel.mapToGlobal(pos))
 
-    def openCoverFile(self):
+    def onCoverFileOpen(self):
         imageFile, _ = QFileDialog.getOpenFileName(self, '选择封面图片', BookShelfConfig().getCoverPath(), 'Image files (*.jpg *.png)')
         image = QPixmap(imageFile).scaled(self.coverLabel.size(), aspectMode=Qt.KeepAspectRatio)
         self.coverfile = imageFile
         self.coverLabel.setPixmap(image)
 
-    def genDefaultCover(self):
+    def onDefaultCoverGen(self):
         pass
 
     def queryByName(self, name):
+        logging.debug('Invoking queryByName with [%s] ...' % name)
+
         with sqlite3.connect(BookShelfConfig().getBookDB()) as conn:
             cur = conn.cursor()
             querystr = BookShelfConfig().getBookDetailQuery() % name
@@ -268,11 +290,18 @@ class BookProperties(QWidget):
                 logging.warning("fail on %s" % querystr)
                 return None
 
+    def onRefreshFromDB(self):
+        logging.debug('Invoking onRefreshFromDB ...')
+        self.autofillInfo()
+        
     def autofillInfo(self):
+        logging.debug('Invoking autofillInfo ...')
+
         bookEntity = self.queryByName(self.titleEdit.text())
         if bookEntity is None:
             self.book['id'] = '-1'
             return
+
         self.book['id'] = '%s' % bookEntity['id']
         self.book['title'] = self.titleEdit.text()
         self.book['author'] = bookEntity['author']
@@ -290,10 +319,12 @@ class BookProperties(QWidget):
         self.book['tags'] = bookEntity['tags'].replace('[', '').replace(']','').split(', ')
         self.book['site'] = bookEntity['site']
         self.book['state'] = bookEntity['state']
-        self.fillBookFields()
+
+        self.fillFormFields()
  
     def mapTags(self, tags):
-        logging.debug("current tags are %s" % tags)
+        logging.debug('Invoking mapTags from [%s] ...' % tags)
+
         index = -1
         for tag in tags:
             catIdx = 0
@@ -310,6 +341,8 @@ class BookProperties(QWidget):
         return (index + 1, 0)
 
     def mapSite(self, source):
+        logging.debug('Invoking mapSite from [%s] ...' % source)
+
         if source in self.sitemap.keys():
             site = self.sitemap[source]
         else:
@@ -321,6 +354,8 @@ class BookProperties(QWidget):
         return index
 
     def mapState(self, state):
+        logging.debug('Invoking mapState from [%s] ...' % state)
+
         if type(state) == int:
             return state
         match state: 
@@ -334,18 +369,22 @@ class BookProperties(QWidget):
                 return -1
     
     def mapId(self, id):
-        logging.debug('current id is %s' % id)
+        logging.debug('Invoking mapId from [%s] ...' % id)
+
         index = self.bookIdBox.findText(id)
         if index == -1:
             index = 0
         return index
 
-    def updateFilePath(self):
+    def onFilepathUpdate(self):
+        logging.debug('Invoking onFilepathUpdate ...')
+
         self.book['filepath'] = self.filepathEdit.text()
         self.titleEdit.setText(PurePath(self.book['filepath']).name[0:-4])
-        self.autofillInfo()
 
-    def importBookInfo(self):
+    def onBookImport(self):
+        logging.debug('Invoking onBookImport ...')
+
         # check book metadata
         if self.titleEdit.text() == '' or self.authorEdit.text() == '':
             QMessageBox.warning(self, "错误", "请填写完整的书籍信息")
@@ -399,6 +438,8 @@ class BookProperties(QWidget):
         self.close()
 
     def identifyChapters(self, filepath, lines):
+        logging.debug('Invoking identifyChapters ...')
+
         chapters = []
         start = 0
         empty = 0
@@ -428,6 +469,8 @@ class BookProperties(QWidget):
         return chapters
 
     def arrangeVolumns(self, lines):
+        logging.debug('Invoking arrangeVolumns ...')
+
         curvol = '正文'
         for chapter in self.book['chapters']:
             chapter[4] = chapter[4] - chapter[3]
@@ -448,11 +491,14 @@ class BookProperties(QWidget):
                     chapter[1] = 'volumn'
                     curvol = chapter[0]
 
-    def openFile(self):
+    def onFileOpen(self):
         filePath = QFileDialog.getOpenFileName(self, '导入txt小说', BookShelfConfig().getSourcePath(), 'Text files (*.txt)')
         self.filepathEdit.setText(filePath[0])
+        self.autofillInfo()
 
     def detectsubject(self, line, prefixes):
+        logging.debug('Invoking detectsubject ...')
+
         if line in string.whitespace:
             return 'empty'
         endTags = BookShelfConfig().getTextEndingList()
@@ -476,6 +522,6 @@ if __name__ == '__main__':
         book = json.load(f)
 
     app = QApplication(sys.argv)
-    bookProperties = BookProperties(book=book, blacklist = ['000001','000002'])
+    bookProperties = BookProperties(book=book, blacklist = ['000001','000002'], debug = True)
     bookProperties.show()
     sys.exit(app.exec()) 

@@ -110,7 +110,7 @@ class BookshelfWnd(QMainWindow):
 
         self.initTagTree()
         self.shelfView.itemClicked.connect(self.onSelectBook)
-        self.shelfView.itemExpanded.connect(self.expandCurrent)
+        self.shelfView.itemExpanded.connect(self.onExpandCurrent)
         self.setCentralWidget(self.mainSplitter)
 
         self.loadShelf()
@@ -144,13 +144,13 @@ class BookshelfWnd(QMainWindow):
         popMenu = QMenu(self)
 
         self.modifyMetaAction = popMenu.addAction('修改')
-        self.modifyMetaAction.triggered.connect(self.modifyMeta)
+        self.modifyMetaAction.triggered.connect(self.onModifyMeta)
         self.deleteBookAction = popMenu.addAction('删除')
-        self.deleteBookAction.triggered.connect(self.deleteBook)
+        self.deleteBookAction.triggered.connect(self.onDeleteBook)
         self.packageBookAction = popMenu.addAction('打包')
-        self.packageBookAction.triggered.connect(self.packageBook)
+        self.packageBookAction.triggered.connect(self.onPackageBook)
         self.generateBookAction = popMenu.addAction('生成')
-        self.generateBookAction.triggered.connect(self.generateEpub)
+        self.generateBookAction.triggered.connect(self.onGenerateEpub)
         
         popMenu.exec(QCursor.pos())
  
@@ -173,23 +173,26 @@ class BookshelfWnd(QMainWindow):
             book['status'] = BookStatus.load
             self.bookList[id] = book
 
-    def modifyMeta(self):
+    def onModifyMeta(self):
         item = self.shelfView.currentItem()
         id = item.whatsThis(0)
         book = self.bookList[id]
         self.bookProperties = BookProperties(book=book)
         self.bookProperties.show()
 
-    def deleteBook(self):
+    def onDeleteBook(self):
         item = self.shelfView.currentItem()
-        id = item.whatsThis(0)
-        self.bookList[id]['status'] = BookStatus.delete
-        item.parent().removeChild(item)
+        self.deleteBook(item)
 
         if id == self.curBook:
             self.curBook = '-1'
             self.clearTocModel()
 
+    def deleteBook(self, item):
+        id = item.whatsThis(0)
+        self.bookList[id]['status'] = BookStatus.delete
+        item.parent().removeChild(item)
+        
     def showContextMenu(self):
         self.tocView.contextMenu = QMenu(self)
         self.mergeChapterAction = self.tocView.contextMenu.addAction('合并章节')
@@ -254,10 +257,10 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setModel(self.tocModel)
         self.book = None
 
-    def packageBook(self):
+    def onPackageBook(self):
         BookUtils(self.book).packageBook()
         
-    def generateEpub(self):
+    def onGenerateEpub(self):
         BookUtils(self.book).generateEpub()
 
     def showChapterContent(self):
@@ -292,7 +295,6 @@ class BookshelfWnd(QMainWindow):
             logging.debug('item %s need to be collapsed' % last.text(0))
             self.collapseItem(last)
 
-#        self.shelfView.expandItem(item.parent())
         self.shelfView.setCurrentItem(item)
         self.refreshTocModel(book)
 
@@ -305,7 +307,7 @@ class BookshelfWnd(QMainWindow):
             self.loadBook(self.curBook)
         self.refreshTocModel(self.bookList[self.curBook])
 
-    def expandCurrent(self, item):
+    def onExpandCurrent(self, item):
         last = self.updateCurentShelf(item)
         if last is not None:
             self.collapseItem(last)

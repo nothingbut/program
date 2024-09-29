@@ -21,6 +21,13 @@ class BookUtils:
             self.rootpath = BookShelfConfig().getTargetPath() + "%s-%s/" % (self.title, self.author)
             self.lines = None
 
+    def dumpBookMeta(self):
+        logging.debug('Dump Book Meta:')
+        logging.debug('id is [%s]' % self.id)
+        logging.debug('title: [%s]' % self.title)
+        logging.debug('author: [%s]' % self.author)
+        logging.debug('tags: [%s]' % self.tags)
+
     def loadFromPandocSource(self, source):
         pass
 
