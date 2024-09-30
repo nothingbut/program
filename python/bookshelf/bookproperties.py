@@ -46,13 +46,14 @@ class BookProperties(QWidget):
 
         self.initUI()
 
+        self.isNew = False
         if book is None:
+            self.isNew = True
             self.book = {}
         else:
             self.book = book
             BookUtils(book).dumpBookMeta()
             self.fillFormFields()
-
             self.disableChangeSource()
 
     def initUI(self):
@@ -215,12 +216,14 @@ class BookProperties(QWidget):
                 self.coverLabel.setPixmap(image)
             except:
                 logging.error('load image error for %s' % self.book['cover'])
+        else:
+            self.coverfile = None
         
     def onBookRefresh(self):
         logging.debug('Invoking onBookRefresh ...')
 
         bookId = self.bookIdBox.currentText()
-        if bookId == self.book['id']:
+        if 'id' in self.book.keys() and bookId == self.book['id']:
             return
         
         self.book['id'] = bookId
@@ -299,7 +302,9 @@ class BookProperties(QWidget):
 
         bookEntity = self.queryByName(self.titleEdit.text())
         if bookEntity is None:
-            self.book['id'] = '-1'
+            if 'id' not in self.book.keys():
+                self.book['id'] = self.generateBookId()
+            print(self.book['id'])
             return
 
         self.book['id'] = '%s' % bookEntity['id']
@@ -395,7 +400,8 @@ class BookProperties(QWidget):
         self.book['title'] = self.titleEdit.text()
         self.book['author'] = self.authorEdit.text()
         self.book['desc'] = self.descEdit.toPlainText()
-        self.book['cover'] = self.coverfile
+        if self.coverfile is not None:
+            self.book['cover'] = self.coverfile
         self.book['source'] = self.filepathEdit.text()
         if self.book['source'] == '':
             self.book['source'] = BookShelfConfig().getBookDB()
@@ -405,6 +411,14 @@ class BookProperties(QWidget):
         self.book['state'] = self.statusList.currentText()
         self.book['tags'] = ['%s' % self.book['cat'], '%s' % self.book['sub'], '%s' % self.book['site'], '%s' % self.book['state']]
 
+        if self.isNew is False:
+            logging.debug('Modify metadata for [%s]' % self.book['title'])
+            self.book['status'] = BookStatus.modified
+            self.imported.emit(self.book)
+            self.close()
+            return
+
+        self.book['status'] = BookStatus.new
         logging.debug("source is %s" % self.book['source'])
         if self.book['source'] == BookShelfConfig().getBookDB():
             self.book['chapters'] = []
@@ -434,6 +448,7 @@ class BookProperties(QWidget):
             self.book['chapters'] = self.identifyChapters(filepath, lines)
             self.arrangeVolumns(lines)
 
+        logging.debug('Adding new book [%s]' % self.book['title'])
         self.imported.emit(self.book)
         self.close()
 
@@ -511,6 +526,23 @@ class BookProperties(QWidget):
                 if re.match(tag % prefix, line):
                     return 'subject:%s' % prefix
         return 'content'
+
+    def generateBookId(self):
+        conn = sqlite3.connect(BookShelfConfig().getBookDB())
+        queryMaxId = 'select max(id) from book_id'
+        cursor = conn.cursor()
+        cursor.execute(queryMaxId)
+        newId = 0
+        for row in cursor:
+            if row is not None and row[0] is not None:
+                newId = int(row[0])
+        queryAddId = 'insert into book_id values(%d)' % (newId + 1)
+        cursor.execute(queryAddId)
+        cursor.close()
+        conn.commit()
+        conn.close()
+
+        return '09%04d' % (newId + 1)
 
 if __name__ == '__main__':
     LOG_FORMAT = "[%(filename)s:<%(lineno)d>] %(asctime)s - %(levelname)s - %(message)s"

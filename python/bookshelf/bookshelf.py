@@ -55,7 +55,7 @@ class BookshelfWnd(QMainWindow):
 
         toolbar = self.addToolBar("Toolbar")
         self.btImport = QAction("导入小说", self)
-        self.btImport.triggered.connect(self.onImportText)
+        self.btImport.triggered.connect(self.onImportBook)
         toolbar.addAction(self.btImport)
         self.btSave = QAction("保存书架", self)
         self.btSave.triggered.connect(self.onSaveShelf)        
@@ -179,6 +179,7 @@ class BookshelfWnd(QMainWindow):
         book = self.bookList[id]
         self.bookProperties = BookProperties(book=book)
         self.bookProperties.show()
+        self.bookProperties.imported.connect(self.importBook)
 
     def onDeleteBook(self):
         item = self.shelfView.currentItem()
@@ -235,7 +236,7 @@ class BookshelfWnd(QMainWindow):
         self.tocView.setModel(self.tocModel)
         self.tocView.setColumnHidden(5, True)        
 
-    def onImportText(self, checked):
+    def onImportBook(self, checked):
         self.bookProperties = BookProperties(blacklist=self.bookList.keys())
         self.bookProperties.show()
         self.bookProperties.imported.connect(self.importBook)
@@ -288,15 +289,19 @@ class BookshelfWnd(QMainWindow):
         return bookItem
 
     def importBook(self, book):
-        book['status'] = BookStatus.new
+        logging.debug('Invoking importBook ...')
+        
+        if book['status'] == BookStatus.modified:
+            org = self.shelfView.currentItem()
+            org.parent().removeChild(org)
+
         item = self.addBook2Shelf(book)
         last = self.updateCurentShelf(item.parent())
         if last is not None:
             logging.debug('item %s need to be collapsed' % last.text(0))
             self.collapseItem(last)
-
-        self.shelfView.setCurrentItem(item)
         self.refreshTocModel(book)
+        self.shelfView.setCurrentItem(item)
 
     def onSelectBook(self, item, column):
         if item.whatsThis(0) == '':
