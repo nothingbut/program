@@ -1,20 +1,18 @@
 {
-   "posix.env.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
    "posix.env.sourcePath": "/Users/shichang/Public/books/chm/",
    "posix.env.targetPath": "/Users/shichang/Public/books/ready/",
    "posix.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
-   "posix.env.coverPath": "/Users/shichang/Workspace/program/data/cover/",
-   "posix.env.cachePath": "/Users/shichang/Workspace/program/data/cache/",
-   "posix.env.bookShelf": "/Users/shichang/Workspace/program/data/books/",
+   "posix.env.coverPath": "/Users/shichang/Public/books/cover/",
+   "posix.env.cachePath": "/Users/shichang/Public/books/cache/",
+   "posix.env.bookShelf": "/Users/shichang/Public/books/shelf/",
    "posix.source.bookDB": "/Users/shichang/sample.db",
 
-   "win.env.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
    "win.env.sourcePath": "/Users/shichang/Public/books/chm/",
    "win.env.targetPath": "/Users/shichang/Public/books/ready/",
-   "win.env.targetFile": "/Users/shichang/Workspace/program/data/%s.epub",
-   "win.env.coverPath": "/Users/shichang/Workspace/program/data/cover",
-   "win.env.cachePath": "/Users/shichang/Workspace/program/data/cache",
-   "win.env.bookShelf": "/Users/shichang/Workspace/program/data/books",
+   "win.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
+   "win.env.coverPath": "/Users/shichang/Public/books/cover",
+   "win.env.cachePath": "/Users/shichang/Public/books/cache",
+   "win.env.bookShelf": "/Users/shichang/Public/books/shelf",
    "win.source.bookDB": "/Users/shichang/Public/Books/sample.db",
 
    "source.yousuu": "https://api.yousuu.com/api/book/%s",
@@ -25,8 +23,13 @@
    "parser.htmlEndStr": "<!--BookContent End-->",
    "gen.chapterHeaderTemplate": "<h2 id=\"title\">%s</h2>",
    "gen.contentLineTemplate": "<p>%s</p>",
+
    "posix.gen.pandocHeaderTemplate": "/Users/shichang/Workspace/program/data/pdheader.templ",
+   "posix.gen.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
+
    "win.gen.pandocHeaderTemplate": "/Users/shichang/Workspace/program/data/pdheader.templ",
+   "win.gen.cssFile": "/Users/shichang/Workspace/program/data/epub.css",
+
    "attr.sourcesites": [
     "--",
     "起点",

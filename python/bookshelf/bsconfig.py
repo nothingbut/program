@@ -15,13 +15,7 @@ class BookShelfConfig:
 
     def get_config(self):
         return self.config
-    
-    def getTemplateFile(self):
-        return self.config.get('.'.join([self.osname,'env.templateFile']))
-    
-    def getCSSFile(self):
-        return self.config.get('.'.join([self.osname,'env.cssFile']))
-    
+        
     def getTargetFile(self):
         return self.config.get('.'.join([self.osname,'env.targetFile']))
     
@@ -76,6 +70,9 @@ class BookShelfConfig:
     def getPandocHeader(self):
         with open(self.config.get('.'.join([self.osname,'gen.pandocHeaderTemplate']))) as fp:
             return fp.read()
+
+    def getCSSFile(self):
+        return self.config.get('.'.join([self.osname,'gen.cssFile']))    
     
 if __name__ == '__main__':
     bsconfig = BookShelfConfig()
