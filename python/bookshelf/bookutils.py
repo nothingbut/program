@@ -1,5 +1,5 @@
 from bsconfig import BookShelfConfig
-import mkepub, shutil, zipfile, chardet, os, yaml, logging, re
+import mkepub, shutil, zipfile, chardet, os, yaml, logging, re, json
 from pathlib import Path
 #import sqlite3, csv
 
@@ -184,11 +184,17 @@ class BookUtils:
             with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
                 fpw.write(filecontent)
 
+    def queryFromCache(self, id):
+        with zipfile.ZipFile(BookShelfConfig().getCacheFile()) as archive:
+            with archive.open('cache/%s.json' % id, mode = 'r') as f:
+                return json.load(f)
+
 if __name__ == '__main__':
     LOG_FORMAT = "[%(filename)s:<%(lineno)d>] %(asctime)s - %(levelname)s - %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
     logging.basicConfig(filename='bsutil.log', level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT)
-    logging.debug(os.name)
+    logging.info(os.name)
+    logging.debug(BookUtils().queryFromCache('12'))
 '''
     csv.field_size_limit(500 * 1024 * 1024)
 

@@ -4,6 +4,7 @@
    "posix.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
    "posix.env.coverPath": "/Users/shichang/Public/books/cover/",
    "posix.env.cachePath": "/Users/shichang/Public/books/cache/",
+   "posix.env.cacheFile": "/Users/shichang/Public/books/cache.zip",
    "posix.env.bookShelf": "/Users/shichang/Public/books/shelf/",
    "posix.source.bookDB": "/Users/shichang/sample.db",
 
@@ -12,6 +13,7 @@
    "win.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
    "win.env.coverPath": "/Users/shichang/Public/books/cover",
    "win.env.cachePath": "/Users/shichang/Public/books/cache",
+   "win.env.cacheFile": "/Users/shichang/Public/books/cache.zip",
    "win.env.bookShelf": "/Users/shichang/Public/books/shelf",
    "win.source.bookDB": "/Users/shichang/Public/Books/sample.db",
 

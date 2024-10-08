@@ -31,6 +31,9 @@ class BookShelfConfig:
     def getCachePath(self):
         return self.config.get('.'.join([self.osname,'env.cachePath']))
 
+    def getCacheFile(self):
+        return self.config.get('.'.join([self.osname,'env.cacheFile']))
+
     def getBookShelf(self):
         return self.config.get('.'.join([self.osname,'env.bookShelf']))
     
