@@ -187,8 +187,8 @@ class BookUtils:
     def queryFromCache(self, id):
         with zipfile.ZipFile(BookShelfConfig().getCacheFile()) as archive:
             with archive.open('cache/%s.json' % id, mode = 'r') as f:
-                return json.load(f)
-
+                return json.load(f).get('data').get('bookInfo')
+            
 if __name__ == '__main__':
     LOG_FORMAT = "[%(filename)s:<%(lineno)d>] %(asctime)s - %(levelname)s - %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
