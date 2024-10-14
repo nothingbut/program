@@ -1,4 +1,13 @@
 {
+   "darwin.env.sourcePath": "/Users/shichang/Public/books/chm/",
+   "darwin.env.targetPath": "/Users/shichang/Public/books/ready/",
+   "darwin.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",
+   "darwin.env.coverPath": "/Users/shichang/Public/books/cover/",
+   "darwin.env.cachePath": "/Users/shichang/Public/books/cache/",
+   "darwin.env.cacheFile": "/Users/shichang/Public/books/cache.zip",
+   "darwin.env.bookShelf": "/Users/shichang/Public/books/shelf/",
+   "darwin.source.bookDB": "/Users/shichang/sample.db",
+
    "posix.env.sourcePath": "/Users/shichang/Public/books/chm/",
    "posix.env.targetPath": "/Users/shichang/Public/books/ready/",
    "posix.env.targetFile": "/Users/shichang/Public/books/ready/%s.epub",

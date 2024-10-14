@@ -159,7 +159,12 @@ class BookshelfWnd(QMainWindow):
         self.curBook = '-1'
         with open('%s/shelf.csv' % BookShelfConfig().getBookShelf(), 'r') as f:
             reader = csv.reader(f)
+            isHeader = True
             for item in reader:
+                if isHeader:
+                    isHeader = False
+                    continue
+
                 book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'source': item[6], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
                 try:
                     self.addBook2Shelf(book)
@@ -376,6 +381,7 @@ class BookshelfWnd(QMainWindow):
 
         with open('%s/shelf.csv' % BookShelfConfig().getBookShelf(), 'w') as f:
             writer = csv.writer(f)
+            writer.writerows([['id', 'title', 'cat','sub','site','state','source']])
             writer.writerows(bookSummaryList)
 
     def saveBook(self, book):
