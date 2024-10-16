@@ -1,0 +1,1 @@
+ /Users/shichang/Workspace/program/flutter/pingren/.dart_tool/flutter_gen/gen_l10n/app_localizations_en.dart /Users/shichang/Workspace/program/flutter/pingren/.dart_tool/flutter_gen/gen_l10n/app_localizations.dart:  /Users/shichang/Workspace/program/flutter/pingren/l10n.yaml /Users/shichang/Workspace/program/flutter/pingren/lib/src/localization/app_en.arb

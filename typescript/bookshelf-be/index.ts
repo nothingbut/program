@@ -16,8 +16,9 @@ async function loadBookList(): Promise<any[]> {
             })
     })
 }
+
 async function getBookshelf(): Promise<Map<string,Map<string, any[]>>> {
-    return new Promise<any[]>((resolve, reject) => {
+    return new Promise<Map<string,Map<string, any[]>>> ((resolve, reject) => {
         loadBookList().then((res) => {
             const bookshelf: Map<string, Map<string, any[]>> | PromiseLike<Map<string, Map<string, any[]>>> = new Map()
             for (var id in res) {
@@ -36,10 +37,19 @@ async function getBookshelf(): Promise<Map<string,Map<string, any[]>>> {
                 bookshelf.get(cat).get(sub).push(res[id]);
             }
             resolve(bookshelf);
+        }).catch(() => {
+            console.log('load bookshelf error')
+            reject(new Map())
         })
     })
 }
 
+async function loadBook(): Promise<Map<string, any>> {
+    return new Promise<Map<string, any>>((resolve, reject) => {
+        fs.createReadStream(getEnvConfiguration(os.platform() + '.env') + 'book.csv').pipe(csv()).on('data', (data)  => resolve(data)).on('end', () => {})
+    })
+}
+    
 getBookshelf().then((res) => {
     console.log(res);
     console.log('done');
