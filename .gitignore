@@ -11,6 +11,12 @@ obj
 temp
 dist
 bin
+.atom
+.buildlog
+.history
+.svn
+migrate_working_dir
+Thumbs.db
 # Miscellaneous
 *.class
 *.log
@@ -19,14 +25,6 @@ bin
 *.dll
 *.pdb
 *.apk
-
-.DS_Store
-.atom/
-.buildlog/
-.history
-.svn/
-migrate_working_dir/
-Thumbs.db
 
 # Android Studio will place build artifacts here
 android
