@@ -2,9 +2,11 @@ import json, os
 
 class BookShelfConfig:
 
-    configFile = '/Users/shichang/Workspace/program/data/bsconfig.json'
+#   osx:configFile = '/Users/shichang/Workspace/program/data/bsconfig.json'
+#   nt:configFile = '/Users/shichang/Workspace/program/data/bsconfig.json'
 
     def __init__(self):
+        self.configFile = os.getenv("NTB_CONFIG_FILE")
         self.config = self.load_config()
         self.osname = os.name
 
@@ -16,6 +18,9 @@ class BookShelfConfig:
     def get_config(self):
         return self.config
         
+    def getRootPath(self):
+        return self.config.get('.'.join([self.osname, 'env.rootPath']))
+    
     def getTargetFile(self):
         return self.config.get('.'.join([self.osname,'env.targetFile']))
     

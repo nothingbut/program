@@ -1,4 +1,4 @@
-import regex as re, string, sqlite3, requests, os, sys, shutil, json, logging
+import regex as re, string, sqlite3, requests, os, sys, shutil, json, logging, zipfile
 from pathlib import PurePath
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMenu, QMessageBox
 from PySide6.QtGui import QPixmap
@@ -434,19 +434,34 @@ class BookProperties(QWidget):
                 index += 1
         else:
             # parse all chapters
-            filepath = BookShelfConfig().getSourcePath() + os.path.basename(self.book['filepath'])
-            shutil.copyfile(self.book['filepath'], filepath)
+            filepath = BookShelfConfig().getSourcePath()
+            fileext = os.path.splitext(self.book['filepath'])[1]
+            if fileext == ".txt":
+                filepath = filepath + os.path.basename(self.book['filepath'])
+                shutil.copyfile(self.book['filepath'], filepath)
+            elif fileext == ".zip":
+                source = zipfile.ZipFile(self.book['filepath'])
+                ziplist = source.namelist()
+                for zip in ziplist:
+                    source.extract(zip, filepath)
+                    filepath = filepath + zip
+                    logging.debug("file path as %s" % filepath)
+                    break
+            elif fileext == ".rar":
+                print(fileext)
+            else:
+                logging.error("incorrect import file: %s" % fileext)
+                return
+
             BookUtils().encode2utf8(filepath)
             self.book['filepath'] = filepath
             self.book['source'] = filepath
-            fp = open(filepath,'r', encoding="utf-8")
-            content = fp.read()
-            fp.close()
 
-            lines = content.rsplit("\n")
-
-            self.book['chapters'] = self.identifyChapters(filepath, lines)
-            self.arrangeVolumns(lines)
+            with open(filepath, "r", encoding="utf-8") as fp:
+                content = fp.read()
+                lines = content.rsplit("\n")
+                self.book['chapters'] = self.identifyChapters(filepath, lines)
+                self.arrangeVolumns(lines)
 
         logging.debug('Adding new book [%s]' % self.book['title'])
         self.imported.emit(self.book)
@@ -507,13 +522,12 @@ class BookProperties(QWidget):
                     curvol = chapter[0]
 
     def onFileOpen(self):
-        filePath = QFileDialog.getOpenFileName(self, '导入txt小说', BookShelfConfig().getSourcePath(), 'Text files (*.txt)')
-        self.filepathEdit.setText(filePath[0])
-        self.autofillInfo()
+        filePath = QFileDialog.getOpenFileName(self, '导入文字（可压缩）小说', BookShelfConfig().getSourcePath(), '小说文件 (*.txt *.zip *.rar)')
+        if filePath[0] != '':
+            self.filepathEdit.setText(filePath[0])
+            self.autofillInfo()
 
     def detectsubject(self, line, prefixes):
-        logging.debug('Invoking detectsubject ...')
-
         if line in string.whitespace:
             return 'empty'
         endTags = BookShelfConfig().getTextEndingList()
@@ -554,6 +568,7 @@ if __name__ == '__main__':
         book = json.load(f)
 
     app = QApplication(sys.argv)
-    bookProperties = BookProperties(book=book, blacklist = ['000001','000002'], debug = True)
+#   bookProperties = BookProperties(book=book, blacklist = ['000001','000002'], debug = True)
+    bookProperties = BookProperties(debug=True)
     bookProperties.show()
     sys.exit(app.exec()) 
