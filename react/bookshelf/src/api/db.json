@@ -1,0 +1,50 @@
+{
+    "categories": [
+        {
+            "id": "1",
+            "name": "Fiction",
+            "subcategories": [
+                "Classic",
+                "Dystopian",
+                "Fantasy",
+                "Science Fiction"
+            ]
+        },
+        {
+            "id": "2",
+            "name": "Non-Fiction",
+            "subcategories": [
+                "History",
+                "Biography",
+                "Self-Help",
+                "Science"
+            ]
+        }
+    ],
+    "books": [
+        {
+            "id": "1",
+            "title": "The Great Gatsby",
+            "author": "F. Scott Fitzgerald",
+            "description": "A story of the fabulously wealthy Jay Gatsby and his love for the beautiful Daisy Buchanan.",
+            "category": "Fiction",
+            "subcategory": "Classic"
+        },
+        {
+            "id": "2",
+            "title": "1984",
+            "author": "George Orwell",
+            "description": "A dystopian novel set in a totalitarian society ruled by the Party and its leader, Big Brother.",
+            "category": "Fiction",
+            "subcategory": "Dystopian"
+        },
+        {
+            "id": "3",
+            "title": "The Art of War",
+            "author": "Sun Tzu",
+            "description": "An ancient Chinese military treatise dating from the Late Spring and Autumn Period.",
+            "category": "Non-Fiction",
+            "subcategory": "History"
+        }
+    ]
+}

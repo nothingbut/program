@@ -8,12 +8,15 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
+    "module": "CommonJS", // Use CommonJS for Node.js compatibility
     "moduleResolution": "Node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false, // Ensure this is set to `false`
+    "noEmit": false, // Allow emitting JavaScript files
+    "outDir": "./dist", // Output directory for compiled files
+    "rootDir": "./src", // Source directory
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
