@@ -14,9 +14,9 @@
     "isolatedModules": true,
     "noEmit": false, // Allow emitting JavaScript files
     "outDir": "./dist", // Output directory for compiled files
-    "rootDir": "./src", // Source directory
+    "rootDir": ".", // Source directory
     "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": ["src", "test", "test/mock-server/db.json"],
   "exclude": ["node_modules"]
 }
