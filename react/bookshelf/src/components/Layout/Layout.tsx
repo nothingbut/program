@@ -36,7 +36,7 @@ const Layout: React.FC = () => {
         />
       </div>
       <div className="right-panel">
-        <MainPanel />
+        <MainPanel book={selectedBook} />
       </div>
     </div>
   );

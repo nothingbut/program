@@ -1,10 +1,21 @@
 import React from "react";
+import { Category, Book } from "../../api/bookService";
 import "./MainPanel.css";
 
-const MainPanel: React.FC = () => {
+interface Props {
+  book: Book | null;
+}
+
+const MainPanel: React.FC<Props> = ({ book }) => {
+  if (!book) return null;
+
+  const { title, author, description } = book;
+
   return (
     <div className="main-panel">
-      <h1>Main Panel</h1>
+      <h1>{title}</h1>
+      <p>Author: {author}</p>
+      <p>Description: {description}</p>
     </div>
   );
 };
