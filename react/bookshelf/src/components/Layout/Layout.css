@@ -1,0 +1,15 @@
+.layout {
+    display: flex;
+    height: 100vh;
+}
+
+.left-panel {
+    width: 300px;
+    background-color: #f4f4f4;
+    border-right: 1px solid #ddd;
+}
+
+.right-panel {
+    flex: 1;
+    background-color: #fff;
+}

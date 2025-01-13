@@ -1,18 +1,19 @@
 {
   "compilerOptions": {
-    "target": "ES6",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "CommonJS", // Use CommonJS for Node.js compatibility
-    "moduleResolution": "Node",
+    "noFallthroughCasesInSwitch": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false, // Allow emitting JavaScript files
+    "noEmit": false, // 确保 noEmit 为 false
     "outDir": "./dist", // Output directory for compiled files
     "rootDir": ".", // Source directory
     "jsx": "react-jsx"

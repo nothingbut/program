@@ -1,10 +1,11 @@
-import React from 'react';
-import Bookshelf from './components/Bookshelf';
+import React from "react";
+import Layout from "./components/Layout/Layout";
+import "./styles/global.css";
 
 const App: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Bookshelf />
+    <div className="app">
+      <Layout />
     </div>
   );
 };
