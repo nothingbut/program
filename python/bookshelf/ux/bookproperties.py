@@ -3,10 +3,10 @@ from pathlib import PurePath
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMenu, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
-from bsconfig import BookShelfConfig
-from enum import Enum
-from bookutils import BookUtils
 from pathlib import Path
+from enum import Enum
+from bsconfig import BookShelfConfig
+from utils.bookutils import BookUtils
 
 headers = {
     'Accept': 'application/json, text/plain, */*',

@@ -3,9 +3,9 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu,
 from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtCore import Qt, QAbstractTableModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from bookproperties import BookProperties, BookStatus
 from bsconfig import BookShelfConfig
-from bookutils import BookUtils
+from utils.bookutils import BookUtils
+from ux.bookproperties import BookProperties, BookStatus
 
 class TOCModel(QAbstractTableModel):
     def __init__(self, parent, chaptersList, *args):
