@@ -43,3 +43,6 @@ captures
 local.properties
 data/shelf.csv
 data/sample.json
+
+target
+Cargo.lock
