@@ -41,3 +41,5 @@ captures
 .externalNativeBuild
 .cxx
 local.properties
+data/shelf.csv
+data/sample.json
