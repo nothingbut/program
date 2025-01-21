@@ -1,4 +1,4 @@
-import regex as re, string, sqlite3, requests, os, sys, shutil, json, logging, zipfile
+import regex as re, string, sqlite3, requests, os, sys, shutil, json, logging, zipfile, rarfile
 from pathlib import PurePath
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMenu, QMessageBox
 from PySide6.QtGui import QPixmap
@@ -160,7 +160,7 @@ class BookProperties(QWidget):
 
         self.parentTag.addItem('--')
         for parent in self.allTags:
-            self.parentTag.addItem(parent['cat'])
+            self.parentTag.addItem(parent['category'])
         self.childTag.addItem('--')
         self.parentTag.activated.connect(self.onChildTagUpdate)
 
@@ -254,7 +254,7 @@ class BookProperties(QWidget):
 
         self.childTag.clear()
         self.childTag.addItem('--')
-        for child in self.allTags[index - 1]['sub']:
+        for child in self.allTags[index - 1]['subcategories']:
             self.childTag.addItem(child)
 
     def showCoverMenu(self, pos):
@@ -333,12 +333,12 @@ class BookProperties(QWidget):
         index = -1
         for tag in tags:
             catIdx = 0
-            for cat in self.allTags:
+            for category in self.allTags:
                 try:
-                    return (catIdx + 1, cat['sub'].index(tag) + 1)
+                    return (catIdx + 1, category['subcategories'].index(tag) + 1)
                 except:
                     pass
-                if tag == cat['cat']:
+                if tag == category['category']:
                     index = catIdx
                     break
                 catIdx += 1
@@ -405,11 +405,11 @@ class BookProperties(QWidget):
         self.book['source'] = self.filepathEdit.text()
         if self.book['source'] == '':
             self.book['source'] = BookShelfConfig().getBookDB()
-        self.book['cat'] = self.parentTag.currentText()
-        self.book['sub'] = self.childTag.currentText()
+        self.book['category'] = self.parentTag.currentText()
+        self.book['subcategory'] = self.childTag.currentText()
         self.book['site'] = self.sitesList.currentText()
         self.book['state'] = self.statusList.currentText()
-        self.book['tags'] = ['%s' % self.book['cat'], '%s' % self.book['sub'], '%s' % self.book['site'], '%s' % self.book['state']]
+        self.book['tags'] = ['%s' % self.book['category'], '%s' % self.book['subcategory'], '%s' % self.book['site'], '%s' % self.book['state']]
 
         if self.isNew is False:
             logging.debug('Modify metadata for [%s]' % self.book['title'])
@@ -438,17 +438,24 @@ class BookProperties(QWidget):
             fileext = os.path.splitext(self.book['filepath'])[1]
             if fileext == ".txt":
                 filepath = filepath + os.path.basename(self.book['filepath'])
-                shutil.copyfile(self.book['filepath'], filepath)
+                if self.book['filepath'] != filepath:
+                    shutil.copyfile(self.book['filepath'], filepath)
             elif fileext == ".zip":
                 source = zipfile.ZipFile(self.book['filepath'])
                 ziplist = source.namelist()
-                for zip in ziplist:
-                    source.extract(zip, filepath)
-                    filepath = filepath + zip
+                for item in ziplist:
+                    source.extract(item, filepath)
+                    filepath = filepath + item
                     logging.debug("file path as %s" % filepath)
                     break
             elif fileext == ".rar":
-                print(fileext)
+                source = rarfile.RarFile(self.book['filepath'])
+                rarlist = source.namelist()
+                for item in rarlist:
+                    source.extract(item, filepath)
+                    filepath = filepath + item
+                    logging.debug("file path as %s" % filepath)
+                    break
             else:
                 logging.error("incorrect import file: %s" % fileext)
                 return

@@ -55,7 +55,7 @@ def getMetadataFromQD(title):
         print("No description found")
 
     subjects = ["网络小说"]
-    match = re.search(r'cat":"([^"]+)"', html_content)
+    match = re.search(r'category":"([^"]+)"', html_content)
     if match:
         subjects.append(match.group(1))
     match = re.search(r'subCateName":"([^"]+)"', html_content)

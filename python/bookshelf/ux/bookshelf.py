@@ -42,8 +42,8 @@ class BookshelfWnd(QMainWindow):
         super(BookshelfWnd, self).__init__(parent)
         self.initModel()
         self.initUI(parent)
-        self.cat = None
-        self.sub = None
+        self.category = None
+        self.subcategory = None
 
     def initModel(self):
         self.chapterList = list()
@@ -121,8 +121,8 @@ class BookshelfWnd(QMainWindow):
         allTags = BookShelfConfig().getTagsJson()
         for top in allTags:
             topItem = QTreeWidgetItem(self.shelfView)
-            topItem.setText(0, top['cat'])
-            for tag in top['sub']:
+            topItem.setText(0, top['category'])
+            for tag in top['subcategories']:
                 tagItem = QTreeWidgetItem()
                 tagItem.setText(0, tag)
                 topItem.addChild(tagItem)
@@ -165,7 +165,7 @@ class BookshelfWnd(QMainWindow):
                     isHeader = False
                     continue
 
-                book = {'id': item[0], 'title': item[1], 'cat': item[2], 'sub': item[3], 'site': item[4], 'state': item[5], 'source': item[6], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
+                book = {'id': item[0], 'title': item[1], 'category': item[2], 'subcategory': item[3], 'site': item[4], 'state': item[5], 'source': item[6], 'tags': [item[2], item[3], item[4], item[5]], 'status': BookStatus.none}
                 try:
                     self.addBook2Shelf(book)
                 except:
@@ -277,16 +277,16 @@ class BookshelfWnd(QMainWindow):
     def addBook2Shelf(self, book):
         topAmount = self.shelfView.topLevelItemCount()
         for top in range(0, topAmount):
-            cat = self.shelfView.topLevelItem(top)
-            if book['cat'] != cat.text(0):
+            category = self.shelfView.topLevelItem(top)
+            if book['category'] != category.text(0):
                 continue
-            childAmount = cat.childCount()
+            childAmount = category.childCount()
             for idx in range(0, childAmount):
-                if book['sub'] == cat.child(idx).text(0):
+                if book['subcategory'] == category.child(idx).text(0):
                     bookItem = QTreeWidgetItem()
                     bookItem.setText(0, book['title'])
                     bookItem.setWhatsThis(0, book['id'])
-                    cat.child(idx).addChild(bookItem)
+                    category.child(idx).addChild(bookItem)
 
                     bookItem.childCount()
 
@@ -336,30 +336,30 @@ class BookshelfWnd(QMainWindow):
     def updateCurentShelf(self, item):
         logging.debug('update to %s' % item.text(0))
         if item.parent() is None:
-            cat = item
-            sub = None
+            category = item
+            subcategory = None
         else:
-            sub = item
-            cat = item.parent()
+            subcategory = item
+            category = item.parent()
 
-        if cat == self.cat and sub is None:
+        if category == self.category and subcategory is None:
             return None
-        if sub == self.sub and sub is not None:
+        if subcategory == self.subcategory and subcategory is not None:
             return None
-        returnItem = self.sub
-        self.sub = sub
-        if cat == self.cat:
-            if self.sub is None:
+        returnItem = self.subcategory
+        self.subcategory = subcategory
+        if category == self.category:
+            if self.subcategory is None:
                 return None
             if returnItem is not None:
-                logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.sub.text(0)))
+                logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.subcategory.text(0)))
 
             return returnItem
         
-        returnItem = self.cat
-        self.cat = cat
+        returnItem = self.category
+        self.category = category
         if returnItem is not None:
-            logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.cat.text(0)))
+            logging.debug('from [%s] to [%s]' % (returnItem.text(0), self.category.text(0)))
 
         return returnItem
 
@@ -375,13 +375,13 @@ class BookshelfWnd(QMainWindow):
                 continue
             if book['status'] == BookStatus.delete:
                 continue
-            bookSummaryList.append([book['id'], book['title'], book['cat'], book['sub'], book['site'], book['state'], book['source']])
+            bookSummaryList.append([book['id'], book['title'], book['category'], book['subcategory'], book['site'], book['state'], book['source']])
             if book['status'] == BookStatus.modified or book['status'] == BookStatus.new:
                 self.saveBook(book)
 
         with open('%s/shelf.csv' % BookShelfConfig().getBookShelf(), 'w') as f:
             writer = csv.writer(f)
-            writer.writerows([['id', 'title', 'cat','sub','site','state','source']])
+            writer.writerows([['id', 'title', 'category','subcategory','site','state','source']])
             writer.writerows(bookSummaryList)
 
     def saveBook(self, book):

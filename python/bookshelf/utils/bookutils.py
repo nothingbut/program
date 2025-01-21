@@ -170,19 +170,23 @@ class BookUtils:
         return ''.join(curcontent)
 
     def encode2utf8(self, filepath):
-        with open(filepath, 'rb') as file:
-            data = file.read(20000)
-            dicts = chardet.detect(data)
-        encode = dicts["encoding"]
-        if encode != 'utf-8' and encode != 'UTF-8-SIG':
-            if 'GB' or 'gb' in encode:
-                encode = 'gbk'
-            else:
-                pass
-            with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
-                filecontent = fpr.read()
-            with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
-                fpw.write(filecontent)
+        logging.debug('Encoding %s to utf-8' % filepath)
+        try:
+            with open(filepath, 'rb') as file:
+                data = file.read(20000)
+                dicts = chardet.detect(data)
+            encode = dicts["encoding"]
+            if encode != 'utf-8' and encode != 'UTF-8-SIG':
+                if 'GB' or 'gb' in encode:
+                    encode = 'gbk'
+                else:
+                    pass
+                with open(filepath, 'r', encoding=encode, errors="ignore") as fpr:
+                    filecontent = fpr.read()
+                with open(filepath, 'w', encoding="utf-8", errors="ignore") as fpw:
+                    fpw.write(filecontent)
+        except Exception as e:
+            logging.fatal('Encoding %s to utf-8 failed: %s' %(filepath, e))
 
     def queryFromCache(self, id):
         with zipfile.ZipFile(BookShelfConfig().getCacheFile()) as archive:
