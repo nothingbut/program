@@ -18,7 +18,7 @@ fn books_routes(db: BooksDb) -> impl Filter<Extract = impl warp::Reply, Error = 
         .and(with_db(db_clone))
         .and_then(get_book);
 
-    books.or(book)
+    book.or(books)
 }
 
 fn with_db(db: BooksDb) -> impl Filter<Extract = (BooksDb,), Error = std::convert::Infallible> + Clone {
