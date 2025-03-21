@@ -11,6 +11,9 @@ importers:
       '@element-plus/icons-vue':
         specifier: ^2.1.0
         version: 2.3.1(vue@3.5.13(typescript@5.8.2))
+      '@tauri-apps/api':
+        specifier: ^2.3.0
+        version: 2.3.0
       '@vueuse/core':
         specifier: ^10.3.0
         version: 10.11.1(vue@3.5.13(typescript@5.8.2))
@@ -217,6 +220,9 @@ packages:
 
   '@sxzz/popperjs-es@2.11.7':
     resolution: {integrity: sha512-Ccy0NlLkzr0Ex2FKvh2X+OyERHXJ88XJ1MXtsI9y9fGexlaXaVTPzBCRBwIxFkORuOb+uBqeu+RqnpgYTEZRUQ==}
+
+  '@tauri-apps/api@2.3.0':
+    resolution: {integrity: sha512-33Z+0lX2wgZbx1SPFfqvzI6su63hCBkbzv+5NexeYjIx7WA9htdOKoRR7Dh3dJyltqS5/J8vQFyybiRoaL0hlA==}
 
   '@tauri-apps/cli-darwin-arm64@2.3.1':
     resolution: {integrity: sha512-TOhSdsXYt+f+asRU+Dl+Wufglj/7+CX9h8RO4hl5k7D6lR4L8yTtdhpS7btaclOMmjYC4piNfJE70GoxhOoYWw==}
@@ -654,6 +660,8 @@ snapshots:
   '@jridgewell/sourcemap-codec@1.5.0': {}
 
   '@sxzz/popperjs-es@2.11.7': {}
+
+  '@tauri-apps/api@2.3.0': {}
 
   '@tauri-apps/cli-darwin-arm64@2.3.1':
     optional: true

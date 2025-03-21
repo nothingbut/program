@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
+    "@tauri-apps/api": "^2.3.0",
     "@vueuse/core": "^10.3.0",
     "element-plus": "^2.3.9",
     "pinia": "^2.1.6",
