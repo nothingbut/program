@@ -23,7 +23,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useMusicStore } from '@/stores/musicStore'
-import { api } from '@/mock/api'
+import { api } from '@/api/tauri-api'
 
 const musicStore = useMusicStore()
 const selectedLibraryId = ref('')
