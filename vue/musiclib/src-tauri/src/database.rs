@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::info;
 use rusqlite::{params, Connection, Result};
 use std::path::Path;
 

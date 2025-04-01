@@ -109,19 +109,6 @@ impl AppState {
     fn read_mp3_metadata(&self, path: &std::path::Path) -> Option<Mp3Metadata> {
         info!("【解析】开始解析MP3文件：{:?}", path);
         
-        // 获取文件基本信息
-        let file_size = match std::fs::metadata(path) {
-            Ok(metadata) => {
-                let size = metadata.len();
-                info!("【文件】大小：{} bytes", size);
-                size
-            },
-            Err(e) => {
-                error!("【错误】无法获取文件大小：{}", e);
-                0
-            }
-        };
-
         // 读取ID3标签
         let tag = match Tag::read_from_path(path) {
             Ok(tag) => {
@@ -271,6 +258,7 @@ impl AppState {
         // 保存到数据库
         for (album_key, songs) in albums {
             if songs.is_empty() {
+                info!("【警告】专辑 {} 为空，跳过", album_key);
                 continue;
             }
 
