@@ -20,11 +20,19 @@
           </template>
         </el-table-column>
         <el-table-column prop="artist" label="歌手" min-width="120" />
-        <el-table-column prop="albumTitle" label="专辑" min-width="120" />
-        <el-table-column prop="trackNumber" label="音轨" width="80" />
+        <el-table-column label="专辑" min-width="120">
+          <template #default="{ row }">
+            {{ musicStore.currentAlbum?.title || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="音轨" width="80">
+          <template #default="{ row }">
+            {{ row.track_number ?? '-' }}
+          </template>
+        </el-table-column>
         <el-table-column label="时长" width="100">
           <template #default="{ row }">
-            {{ formatDuration(row.duration) }}
+            {{ row.duration ? formatDuration(row.duration) : '-' }}
           </template>
         </el-table-column>
       </el-table>
@@ -42,9 +50,10 @@ import type { Song } from '@/interfaces/types'
 
 const musicStore = useMusicStore()
 
-const formatDuration = (seconds: number): string => {
+const formatDuration = (seconds: number | null): string => {
+  if (seconds == null) return '-'
   const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
+  const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 

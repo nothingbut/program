@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog';
 import type { MusicLibrary, Album } from '@/interfaces/types'
 
 export const api = {
@@ -22,8 +23,38 @@ export const api = {
     return await invoke('get_album', { libraryId, albumId })
   },
 
-  // 添加新的音乐库
-  async addMusicLibrary(name: string): Promise<MusicLibrary> {
-    return await invoke('add_music_library', { name })
+  // 选择目录
+  async selectDirectory(): Promise<string | null> {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: '选择音乐文件目录'
+      })
+      return selected as string
+    } catch (error) {
+      console.error('选择目录失败:', error)
+      return null
+    }
+  },
+
+  // 创建新的音乐库并扫描目录
+  async createMusicLibrary(params: { name: string; directories: string[] }): Promise<MusicLibrary> {
+    return await invoke('create_music_library', { 'params': params })
+  },
+
+  // 添加目录到音乐库
+  async addLibraryDirectory(libraryId: string, directoryPath: string): Promise<void> {
+    return await invoke('add_library_directory', { libraryId, directoryPath })
+  },
+
+  // 获取音乐库的目录列表
+  async getLibraryDirectories(libraryId: string): Promise<{ id: string; directoryPath: string }[]> {
+    return await invoke('get_library_directories', { libraryId })
+  },
+
+  // 移除音乐库目录
+  async removeLibraryDirectory(directoryId: string): Promise<void> {
+    return await invoke('remove_library_directory', { directoryId })
   }
 }

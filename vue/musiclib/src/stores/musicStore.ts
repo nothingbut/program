@@ -29,6 +29,17 @@ export const useMusicStore = defineStore('music', {
       this.libraries = libraries
     },
 
+    updateLibrary(library: MusicLibrary) {
+      const index = this.libraries.findIndex(lib => lib.id === library.id)
+      if (index !== -1) {
+        this.libraries[index] = library
+        // 如果更新的是当前选中的音乐库，也更新currentLibrary
+        if (this.currentLibrary?.id === library.id) {
+          this.currentLibrary = library
+        }
+      }
+    },
+
     selectLibrary(libraryId: string) {
       this.currentLibrary = this.libraries.find(lib => lib.id === libraryId) || null
       this.currentAlbum = null
@@ -92,6 +103,10 @@ export const useMusicStore = defineStore('music', {
 
     updateProgress(time: number) {
       this.playbackState.currentTime = time
+    },
+
+    addLibrary(library: MusicLibrary) {
+      this.libraries.push(library)
     }
   }
 })

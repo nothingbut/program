@@ -1,7 +1,13 @@
+export interface LibraryDirectory {
+  id: string;
+  directoryPath: string;
+}
+
 export interface MusicLibrary {
   id: string;
   name: string;
   albums: Album[];
+  directories: LibraryDirectory[];
 }
 
 export interface Album {
@@ -17,10 +23,10 @@ export interface Song {
   id: string;
   title: string;
   artist: string;
-  albumId: string;
-  albumTitle: string;
-  trackNumber: number;
-  duration: number; // 单位：秒
+  album_id: string;
+  track_number: number | null;
+  duration: number | null;
+  file_path: string | null;
 }
 
 export interface PlaybackState {

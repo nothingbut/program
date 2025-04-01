@@ -12,6 +12,7 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
     "@tauri-apps/api": "^2.3.0",
+    "@tauri-apps/plugin-dialog": "~2",
     "@vueuse/core": "^10.3.0",
     "element-plus": "^2.3.9",
     "pinia": "^2.1.6",
