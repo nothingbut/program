@@ -17,7 +17,7 @@
         value="create"
       />
     </el-select>
-    <CreateLibraryDialog ref="createLibraryDialog" @created="handleLibraryCreated" />
+    <LibraryDetailDialog ref="createLibraryDialog" @created="handleLibraryCreated" />
   </div>
 </template>
 
@@ -25,7 +25,7 @@
 import { ref, onMounted } from 'vue'
 import { useMusicStore } from '@/stores/musicStore'
 import { api } from '@/api/tauri-api'
-import CreateLibraryDialog from './CreateLibraryDialog.vue'
+import LibraryDetailDialog from './LibraryDetailDialog.vue'
 
 const musicStore = useMusicStore()
 const selectedLibraryId = ref('')
