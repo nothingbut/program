@@ -9,7 +9,7 @@
         @click="selectAlbum(album.id)"
       >
         <el-image
-          :src="album.coverUrl"
+          :src="album.cover_data ? `data:image/jpeg;base64,${album.cover_data}` : ''"
           fit="cover"
           class="album-cover"
           :alt="album.title"

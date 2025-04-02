@@ -34,7 +34,7 @@ impl Database {
                 library_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 artist TEXT NOT NULL,
-                cover_url TEXT,
+                cover_data TEXT,  -- base64 encoded image data
                 year INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -128,14 +128,14 @@ impl Database {
         library_id: &str,
         title: &str,
         artist: &str,
-        cover_url: Option<&str>,
+        cover_data: Option<&str>,
         year: Option<i32>,
     ) -> Result<()> {
         info!("【数据库】添加专辑：{} - {}", artist, title);
         self.conn.execute(
-            "INSERT INTO albums (id, library_id, title, artist, cover_url, year)
+            "INSERT INTO albums (id, library_id, title, artist, cover_data, year)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![id, library_id, title, artist, cover_url, year],
+            params![id, library_id, title, artist, cover_data, year],
         )?;
         info!("【数据库】专辑添加成功");
         Ok(())
@@ -147,7 +147,7 @@ impl Database {
     ) -> Result<Vec<(String, String, String, Option<String>, Option<i32>)>> {
         info!("【数据库】获取音乐库的专辑列表：{}", library_id);
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, artist, cover_url, year 
+            "SELECT id, title, artist, cover_data, year 
              FROM albums 
              WHERE library_id = ?1",
         )?;

@@ -27,7 +27,7 @@ pub struct Album {
     pub id: String,
     pub title: String,
     pub artist: String,
-    pub cover_url: Option<String>,
+    pub cover_data: Option<String>,
     pub year: Option<i32>,
     pub songs: Vec<Song>,
 }
@@ -63,6 +63,7 @@ struct Mp3Metadata {
     year: Option<i32>,
     duration: i32,
     file_path: String,
+    cover_data: Option<String>,  // base64 编码的封面图片数据
 }
 
 // 应用状态管理
@@ -153,6 +154,15 @@ impl AppState {
         let album = safe_extract_text("专辑", tag.album(), "Unknown Album");
         let album_artist = safe_extract_text("专辑艺术家", tag.album_artist(), &artist);
 
+        // 提取封面图片
+        let cover_data = if let Some(picture) = tag.pictures().next() {
+            info!("【解析】成功读取封面图片，格式：{}", picture.mime_type);
+            Some(base64::encode(&picture.data))
+        } else {
+            info!("【解析】未找到封面图片");
+            None
+        };
+
         // 记录字段的详细诊断信息
         for (field, value) in [
             ("标题", &title),
@@ -222,6 +232,7 @@ impl AppState {
             year,
             duration,
             file_path,
+            cover_data,
         };
 
         info!("【完成】成功创建元数据对象");
@@ -271,7 +282,7 @@ impl AppState {
                 library_id,
                 &first_song.album,
                 &first_song.album_artist,
-                None, // TODO: 处理专辑封面
+                first_song.cover_data.as_deref(),
                 first_song.year,
             )
             .map_err(|e| e.to_string())?;
@@ -323,7 +334,7 @@ async fn get_music_libraries(state: State<'_, AppState>) -> Result<Vec<MusicLibr
                 let albums = db.get_albums(&library_id).map_err(|e| e.to_string())?;
                 let mut library_albums = Vec::new();
 
-                for (album_id, title, artist, cover_url, year) in albums {
+                for (album_id, title, artist, cover_data, year) in albums {
                     let songs = db.get_songs(&album_id).map_err(|e| e.to_string())?;
                     let album_songs = songs
                         .into_iter()
@@ -344,7 +355,7 @@ async fn get_music_libraries(state: State<'_, AppState>) -> Result<Vec<MusicLibr
                         id: album_id,
                         title,
                         artist,
-                        cover_url,
+                        cover_data,
                         year,
                         songs: album_songs,
                     });
@@ -398,7 +409,7 @@ async fn get_music_library(
                     let albums = db.get_albums(library_id).map_err(|e| e.to_string())?;
                     let mut library_albums = Vec::new();
 
-                    for (album_id, title, artist, cover_url, year) in albums {
+                    for (album_id, title, artist, cover_data, year) in albums {
                         let songs = db.get_songs(&album_id).map_err(|e| e.to_string())?;
                         let album_songs = songs
                             .into_iter()
@@ -419,7 +430,7 @@ async fn get_music_library(
                             id: album_id,
                             title,
                             artist,
-                            cover_url,
+                            cover_data,
                             year,
                             songs: album_songs,
                         });
@@ -575,7 +586,7 @@ async fn create_music_library(
     let albums = db.get_albums(&id).map_err(|e| e.to_string())?;
     let mut library_albums = Vec::new();
 
-    for (album_id, title, artist, cover_url, year) in albums {
+    for (album_id, title, artist, cover_data, year) in albums {
         let songs = db.get_songs(&album_id).map_err(|e| e.to_string())?;
         let album_songs = songs
             .into_iter()
@@ -596,7 +607,7 @@ async fn create_music_library(
             id: album_id,
             title,
             artist,
-            cover_url,
+            cover_data,
             year,
             songs: album_songs,
         });
