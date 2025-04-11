@@ -1,37 +1,26 @@
 <template>
   <div class="playback-control" v-if="musicStore.playbackState.currentSong">
-    <div class="album-cover">
-      <el-image
-        :src="currentAlbumCover ? `data:image/jpeg;base64,${currentAlbumCover}` : ''"
-        fit="cover"
-        class="cover-image"
-      >
-        <template #error>
-          <div class="image-placeholder">
-            <el-icon><Picture /></el-icon>
-          </div>
-        </template>
-      </el-image>
-    </div>
-
-    <div class="control-panel">
-      <audio
-        ref="audioPlayer"
-        :src="currentAudioUrl || undefined"
-        @timeupdate="handleTimeUpdate"
-        @loadedmetadata="handleMetadataLoaded"
-        @ended="handleEnded"
-        @error="handleError"
-      ></audio>
-
-      <div class="song-info">
-        <div class="song-title">{{ musicStore.playbackState.currentSong.title }}</div>
-        <div class="song-artist">{{ musicStore.playbackState.currentSong.artist }}</div>
+    <div class="top-section">
+      <div class="album-cover">
+        <el-image :src="currentAlbumCover ? `data:image/jpeg;base64,${currentAlbumCover}` : ''" fit="cover"
+          class="cover-image">
+          <template #error>
+            <div class="image-placeholder">
+              <el-icon>
+                <Picture />
+              </el-icon>
+            </div>
+          </template>
+        </el-image>
       </div>
+
+      <div class="song-title">{{ musicStore.playbackState.currentSong.title }}</div>
 
       <div class="controls">
         <el-button circle @click="handlePrevious">
-          <el-icon><Back /></el-icon>
+          <el-icon>
+            <Back />
+          </el-icon>
         </el-button>
         <el-button circle type="primary" @click="handlePlayPause">
           <el-icon>
@@ -39,32 +28,34 @@
           </el-icon>
         </el-button>
         <el-button circle @click="handleNext">
-          <el-icon><Right /></el-icon>
+          <el-icon>
+            <Right />
+          </el-icon>
         </el-button>
       </div>
 
+      <div class="song-artist">{{ musicStore.playbackState.currentSong.artist }}</div>
+
+      <div class="play-mode">
+        <el-button circle :type="musicStore.playbackState.playMode === 'random' ? 'primary' : ''"
+          @click="handlePlayModeToggle">
+          <el-icon>
+            <component :is="musicStore.playbackState.playMode === 'random' ? Sort : Sort" />
+          </el-icon>
+        </el-button>
+      </div>
+    </div>
+
+    <div class="bottom-section">
       <div class="progress">
         <span class="time">{{ formatTime(currentTime) }}</span>
-        <el-slider
-          v-model="currentProgress"
-          :max="duration"
-          @change="handleSeek"
-        />
+        <el-slider v-model="currentProgress" :max="duration" @change="handleSeek" />
         <span class="time">{{ formatTime(duration) }}</span>
       </div>
     </div>
 
-    <div class="play-mode">
-      <el-button
-        circle
-        :type="musicStore.playbackState.playMode === 'random' ? 'primary' : ''"
-        @click="handlePlayModeToggle"
-      >
-        <el-icon>
-          <component :is="musicStore.playbackState.playMode === 'random' ? Sort : Sort" />
-        </el-icon>
-      </el-button>
-    </div>
+    <audio ref="audioPlayer" :src="currentAudioUrl || undefined" @timeupdate="handleTimeUpdate"
+      @loadedmetadata="handleMetadataLoaded" @ended="handleEnded" @error="handleError"></audio>
   </div>
 </template>
 
@@ -110,7 +101,7 @@ const updateAudioUrl = async (filePath: string) => {
       throw new Error('空的音频URL')
     }
 
-    const finalUrl = url.startsWith(('file://', 'asset://')) ? url : `file://${url}`;
+    const finalUrl = url.startsWith(('file://')) ? url : `file://${url}`;
     audioUrl.value = finalUrl
     console.log('最终使用的音频URL:', finalUrl)
     
@@ -313,19 +304,30 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 100px;
+  height: 120px;
   background: #fff;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   display: flex;
-  align-items: center;
-  padding: 0 20px;
+  flex-direction: column;
+  padding: 10px 20px;
   z-index: 1000;
 }
 
+.top-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  margin-bottom: 10px;
+}
+
+.bottom-section {
+  height: 30px;
+}
+
 .album-cover {
-  width: 64px;
-  height: 64px;
-  margin-right: 20px;
+  width: 50px;
+  height: 50px;
   flex-shrink: 0;
 }
 
@@ -345,30 +347,15 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-.control-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0; /* 确保flex子元素可以正确收缩 */
-  padding: 8px 0;
-}
-
-.song-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0; /* 确保flex子元素可以正确收缩 */
-}
-
 .song-title {
   font-size: 14px;
   font-weight: bold;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 0;
-  line-height: 1.4;
+  margin: 0 10px;
+  flex: 1;
+  max-width: 200px;
 }
 
 .song-artist {
@@ -377,46 +364,50 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 0;
-  line-height: 1.4;
+  margin: 0 10px;
+  flex: 1;
+  max-width: 200px;
+  text-align: right; /* 添加这一行实现右对齐 */
 }
 
 .controls {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin: 4px 0;
+  gap: 10px;
+  margin: 0 10px;
 }
 
 .progress {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 0 4px;
 }
 
 .time {
   font-size: 12px;
   color: #909399;
-  min-width: 45px;
+  min-width: 40px;
   text-align: center;
-  flex-shrink: 0;
 }
 
 :deep(.el-slider) {
   flex: 1;
-  margin: 0 8px;
-}
-
-:deep(.el-slider__runway) {
-  margin: 8px 0;
 }
 
 .play-mode {
-  margin-left: 20px;
-  flex-shrink: 0;
+  margin-left: 10px;
+}
+
+/* 按钮样式调整 */
+:deep(.el-button.is-circle) {
+  width: 36px;
+  height: 36px;
+}
+
+:deep(.el-button--primary.is-circle) {
+  width: 40px;
+  height: 40px;
 }
 
 /* 隐藏音频元素 */

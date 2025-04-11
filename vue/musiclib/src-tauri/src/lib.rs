@@ -13,7 +13,6 @@ use walkdir::WalkDir;
 // 为音频文件创建URL的命令
 #[tauri::command]
 async fn get_audio_file_url(
-    app_handle: tauri::AppHandle,
     file_path: String,
 ) -> Result<String, String> {
     info!("【API】获取音频文件URL，文件路径：{}", file_path);
@@ -34,10 +33,7 @@ async fn get_audio_file_url(
         return Err("文件不存在".to_string());
     }
 
-    // 使用 asset:// 协议构建 URL
-    let file_url = format!("assets://{}", file_path.to_string_lossy());
-    info!("【API】生成音频文件URL：{}", file_url);
-    Ok(file_url)
+    Ok(file_path.to_string_lossy().into_owned())
 }
 
 // 数据结构定义
