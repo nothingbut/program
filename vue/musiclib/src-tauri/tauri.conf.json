@@ -20,7 +20,13 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allowed": ["**/*.mp3"]
+        }
+      }
     }
   },
   "bundle": {

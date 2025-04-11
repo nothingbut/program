@@ -51,10 +51,37 @@ export const useMusicStore = defineStore('music', {
     },
 
     playSong(song: Song) {
-      this.playbackState.currentSong = song
-      this.playbackState.isPlaying = true
-      this.playbackState.currentTime = 0
-      this.playbackState.duration = song.duration
+      if (!song.file_path) {
+        console.error('Cannot play song: Missing file path', song)
+        return
+      }
+
+      if (!song.duration || song.duration <= 0) {
+        console.warn('Song duration is invalid:', song.duration)
+      }
+
+      console.log('Playing song:', {
+        title: song.title,
+        artist: song.artist,
+        duration: song.duration,
+        filePath: song.file_path
+      })
+
+      try {
+        this.playbackState.currentSong = song
+        this.playbackState.isPlaying = true
+        this.playbackState.currentTime = 0
+        this.playbackState.duration = song.duration!
+
+        console.log('Playback state updated:', {
+          isPlaying: this.playbackState.isPlaying,
+          currentTime: this.playbackState.currentTime,
+          duration: this.playbackState.duration,
+          playMode: this.playbackState.playMode
+        })
+      } catch (error) {
+        console.error('Error updating playback state:', error)
+      }
     },
 
     togglePlayMode() {
@@ -64,6 +91,12 @@ export const useMusicStore = defineStore('music', {
     togglePlay() {
       if (this.playbackState.currentSong) {
         this.playbackState.isPlaying = !this.playbackState.isPlaying
+      }
+    },
+
+    setPlaying(isPlaying: boolean) {
+      if (this.playbackState.currentSong) {
+        this.playbackState.isPlaying = isPlaying
       }
     },
 
@@ -103,6 +136,14 @@ export const useMusicStore = defineStore('music', {
 
     updateProgress(time: number) {
       this.playbackState.currentTime = time
+    },
+
+    updateCurrentTime(time: number) {
+      this.playbackState.currentTime = time
+    },
+
+    updateDuration(duration: number) {
+      this.playbackState.duration = duration
     },
 
     addLibrary(library: MusicLibrary) {

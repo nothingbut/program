@@ -10,6 +10,36 @@ use std::path::PathBuf;
 use tauri::Manager;
 use walkdir::WalkDir;
 
+// 为音频文件创建URL的命令
+#[tauri::command]
+async fn get_audio_file_url(
+    app_handle: tauri::AppHandle,
+    file_path: String,
+) -> Result<String, String> {
+    info!("【API】获取音频文件URL，文件路径：{}", file_path);
+    
+    // 验证文件是否存在
+    let path = std::path::Path::new(&file_path);
+    if !path.exists() {
+        error!("【错误】文件不存在：{}", file_path);
+        return Err("文件不存在".to_string());
+    }
+
+    // 使用 Tauri 的 asset 协议
+    let file_path = std::path::PathBuf::from(&file_path);
+    
+    // 验证文件是否存在
+    if !file_path.exists() {
+        error!("【错误】文件不存在：{}", file_path.display());
+        return Err("文件不存在".to_string());
+    }
+
+    // 使用 asset:// 协议构建 URL
+    let file_url = format!("assets://{}", file_path.to_string_lossy());
+    info!("【API】生成音频文件URL：{}", file_url);
+    Ok(file_url)
+}
+
 // 数据结构定义
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Song {
@@ -652,7 +682,8 @@ pub fn run() {
             create_music_library,
             add_library_directory,
             get_library_directories,
-            remove_library_directory
+            remove_library_directory,
+            get_audio_file_url
         ])
         .run(tauri::generate_context!())
         .expect("运行应用程序时出错");

@@ -56,5 +56,10 @@ export const api = {
   // 移除音乐库目录
   async removeLibraryDirectory(directoryId: string): Promise<void> {
     return await invoke('remove_library_directory', { directoryId })
+  },
+
+  // 获取音频文件的URL
+  async getAudioFileUrl(filePath: string): Promise<string> {
+    return await invoke('get_audio_file_url', { filePath })
   }
 }
