@@ -56,7 +56,7 @@ const isAlbumSelected = (albumId: string): boolean => {
 
 .albums-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 20px;
 }
 
@@ -80,13 +80,13 @@ const isAlbumSelected = (albumId: string): boolean => {
 
 .album-cover {
   width: 100%;
-  height: 200px;
+  height: 100px;
   object-fit: cover;
 }
 
 .image-placeholder {
   width: 100%;
-  height: 200px;
+  height: 100px;
   background: #f5f7fa;
   display: flex;
   align-items: center;
@@ -101,8 +101,8 @@ const isAlbumSelected = (albumId: string): boolean => {
 
 .album-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 8px;
+  font-weight: 300;
   color: #303133;
   white-space: nowrap;
   overflow: hidden;
@@ -110,8 +110,8 @@ const isAlbumSelected = (albumId: string): boolean => {
 }
 
 .album-artist {
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: 2px 0 0;
+  font-size: 7px;
   color: #909399;
 }
 

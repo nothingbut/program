@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <el-container>
-      <el-aside width="300px" class="left-panel">
+      <el-aside width="150px" class="left-panel">
         <LibrarySelector />
         <AlbumList />
       </el-aside>
