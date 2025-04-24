@@ -121,6 +121,6 @@ const isAlbumSelected = (albumId: string): boolean => {
   justify-content: center;
   height: 100%;
   color: #909399;
-  font-size: 16px;
+  font-size: 12px;
 }
 </style>

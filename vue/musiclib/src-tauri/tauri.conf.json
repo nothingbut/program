@@ -9,6 +9,18 @@
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"
   },
+  "plugins": {
+    "fs": {
+      "scope": [
+        {
+          "path": "$HOME/Music/take/Test1/**",
+          "allow": [
+            "read"
+          ]
+        }
+      ]
+    }
+  },
   "app": {
     "windows": [
       {
