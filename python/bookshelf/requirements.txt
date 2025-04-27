@@ -1,0 +1,7 @@
+PySide6
+requests
+regex
+mkepub
+chardet
+PyYAML
+rarfile
