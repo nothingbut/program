@@ -4,8 +4,6 @@ import os
 import re
 import collections
 
-import markdownify
-import frontmatter
 from html5lib_to_markdown import transform
 
 # 设置请求头，模拟浏览器访问
