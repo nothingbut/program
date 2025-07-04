@@ -3,7 +3,7 @@ import json, os
 class BookShelfConfig:
 
 #   osx:configFile = '/Users/shichang/Workspace/program/data/bsconfig.json'
-#   nt:configFile = '/Users/shichang/Workspace/program/data/bsconfig.json'
+#   nt:configFile = '\\Users\\shichang\\Workspace\\program\\data\\bsconfig.json'
 
     def __init__(self):
         self.configFile = os.getenv("NTB_CONFIG_FILE")
