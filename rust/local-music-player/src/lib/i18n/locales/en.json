@@ -1,0 +1,69 @@
+{
+  "app": {
+    "title": "Local MP3 Player",
+    "loading": "Loading...",
+    "ready": "Ready"
+  },
+  "directory": {
+    "title": "Music Directories",
+    "add": "Add Directory",
+    "empty": "No directories added yet",
+    "select": "Select a directory to view music files",
+    "remove": "Remove Directory",
+    "scan": "Scanning...",
+    "error": "Error accessing directory"
+  },
+  "playlist": {
+    "title": "Playlist",
+    "empty": "No music files found",
+    "loading": "Loading music files...",
+    "columns": {
+      "title": "Title",
+      "artist": "Artist",
+      "album": "Album",
+      "track": "Track",
+      "duration": "Duration"
+    },
+    "unknown": "Unknown"
+  },
+  "player": {
+    "play": "Play",
+    "pause": "Pause",
+    "previous": "Previous",
+    "next": "Next",
+    "shuffle": "Shuffle",
+    "repeat": "Repeat",
+    "volume": "Volume",
+    "mute": "Mute",
+    "currentTime": "Current Time",
+    "totalTime": "Total Time"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "close": "Close",
+    "save": "Save"
+  },
+  "dialog": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "error": {
+    "fileNotFound": "File not found",
+    "cannotPlay": "Cannot play this file",
+    "networkError": "Network error",
+    "unknownError": "An unknown error occurred"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "help": "Help",
+    "about": "About",
+    "quit": "Quit"
+  }
+}

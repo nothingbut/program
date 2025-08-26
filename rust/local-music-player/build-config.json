@@ -1,0 +1,39 @@
+{
+  "signing": {
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.sectigo.com"
+    },
+    "macos": {
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null,
+      "hardenedRuntime": true,
+      "notarize": false
+    }
+  },
+  "distribution": {
+    "channels": ["stable", "beta", "alpha"],
+    "platforms": {
+      "windows": {
+        "targets": ["x86_64-pc-windows-msvc"],
+        "installer": "msi"
+      },
+      "macos": {
+        "targets": ["x86_64-apple-darwin", "aarch64-apple-darwin"],
+        "installer": "dmg"
+      },
+      "linux": {
+        "targets": ["x86_64-unknown-linux-gnu"],
+        "installer": ["deb", "appimage"]
+      }
+    }
+  },
+  "optimization": {
+    "stripSymbols": true,
+    "lto": true,
+    "codegen-units": 1,
+    "panic": "abort"
+  }
+}
