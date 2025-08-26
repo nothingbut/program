@@ -16,6 +16,7 @@ bin
 .history
 .svn
 .aider.ignore
+.svelte-kit
 migrate_working_dir
 Thumbs.db
 # Miscellaneous
