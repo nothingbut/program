@@ -1,3 +1,4 @@
+standard-imghdr
 PySide6
 requests
 regex
