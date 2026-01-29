@@ -1,8 +1,10 @@
 <script lang="ts">
   import '../app.css';
-  import { onMount } from 'svelte';
-  import { getCategoriesWithBooks, getChaptersByBook } from '$lib/services/api';
-  import type { Category, Book, Chapter } from '$lib/types';
+import { onMount } from 'svelte';
+import { getCategoriesWithBooks, getChaptersByBook } from '$lib/services/api';
+import type { Category, Book, Chapter } from '$lib/types';
+import { invoke } from '@tauri-apps/api/core';
+import ImportDialog from '$lib/components/ImportDialog.svelte';
 
   // 状态管理
   let expandedCategories = $state<number[]>([]);  // 一级分类展开状态
@@ -18,6 +20,41 @@
   let books = $state<Book[]>([]);
   let chapters = $state<Chapter[]>([]);
   let isLoading = $state(true);
+
+  // 导入对话框状态
+  let showImportDialog = $state(false);
+
+  // 导入TXT文件
+  async function importTxtFile() {
+    try {
+      // 简化的文件选择 - 只使用基本的消息框
+      const filePath = prompt('请输入TXT文件路径:');
+      
+      if (filePath) {
+        statusMessage = '正在导入文件...';
+        
+        const result = await invoke('import_txt_file', {
+          filePath: filePath.trim(),
+          title: filePath.split('/').pop()?.replace('.txt', '') || '未命名书籍',
+          author: null,
+          categoryId: 1 // 默认分类
+        });
+        
+        if (result) {
+          statusMessage = '导入成功！';
+          // 重新加载数据
+          const data = await getCategoriesWithBooks();
+          categories = data;
+          statusMessage = `就绪 - ${categories.length} 个分类`;
+        } else {
+          statusMessage = '导入失败';
+        }
+      }
+    } catch (error) {
+      console.error('导入失败:', error);
+      statusMessage = '导入失败';
+    }
+  }
 
   // 页面加载时获取数据
   onMount(async () => {
@@ -159,6 +196,23 @@
     if (selectedSubcategory) return categories.find(c => c.id === selectedSubcategory);
     return null;
   }
+
+  // 导入对话框回调
+  function handleImportClose() {
+    showImportDialog = false;
+  }
+
+  async function handleImportSuccess() {
+    showImportDialog = false;
+    // 重新加载数据
+    try {
+      const data = await getCategoriesWithBooks();
+      categories = data;
+      statusMessage = `导入成功！- ${categories.length} 个分类`;
+    } catch (error) {
+      console.error('重新加载数据失败:', error);
+    }
+  }
 </script>
 
 <div class="h-screen flex flex-col bg-gray-50">
@@ -182,7 +236,7 @@
   
   <!-- 工具栏 -->
   <div class="h-10 bg-gray-50 border-b border-gray-200 flex items-center px-3 gap-2 flex-shrink-0">
-    <button class="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors">
+    <button class="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onclick={() => showImportDialog = true}>
       <span>📥</span>
       <span class="text-gray-700">导入</span>
     </button>
@@ -299,7 +353,7 @@
                   让阅读体验更加流畅和美观。
                 </p>
                 <div class="mt-6 pt-4 border-t border-gray-100 text-sm text-gray-400">
-                  当前章节：{getCurrentChapter()?.volume} · {getCurrentChapter()?.lines} 行
+                  当前章节：{getCurrentChapter()?.title} · {getCurrentChapter()?.word_count} 字
                 </div>
               </div>
             </div>
@@ -321,11 +375,11 @@
                   </div>
                   <div class="flex items-start gap-2">
                     <span class="font-medium text-gray-500 w-16">章节：</span>
-                    <span>{getCurrentBook()?.chapters} 章</span>
+                    <span>{chapters.length} 章</span>
                   </div>
                   <div class="flex items-start gap-2">
                     <span class="font-medium text-gray-500 w-16">字数：</span>
-                    <span>{getCurrentBook()?.words}</span>
+                    <span>{getCurrentBook()?.word_count.toLocaleString()} 字</span>
                   </div>
                   <div class="mt-4">
                     <span class="font-medium text-gray-500 block mb-2">简介：</span>
@@ -421,3 +475,11 @@
     </div>
   </div>
 </div>
+
+<!-- 导入对话框 -->
+<ImportDialog
+  bind:visible={showImportDialog}
+  onClose={handleImportClose}
+  onSuccess={handleImportSuccess}
+  categories={categories}
+/>
