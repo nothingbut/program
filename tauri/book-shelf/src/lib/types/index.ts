@@ -46,3 +46,10 @@ export interface SearchResult {
   type: 'book' | 'chapter';
   data: Book | Chapter & { book_title: string };
 }
+
+// 导入结果类型
+export interface ImportResult {
+  bookId: number;
+  chapterCount: number;
+  wordCount: number;
+}

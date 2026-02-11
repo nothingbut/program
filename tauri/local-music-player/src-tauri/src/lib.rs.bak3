@@ -147,12 +147,12 @@ impl MetadataParser {
         let mut pictures = tag.pictures();
         // Get first picture (usually front cover)
         if let Some(picture) = pictures.next() {
-            let cover_data = picture.data.clone();
+            let cover_data = picture.data();
             if !cover_data.is_empty() {
-                track.cover_art = Some(cover_data.clone());
-                eprintln!("Extracted cover art from {}: {} bytes, mime: {}",
-                    path.display(), cover_data.len(), picture.mime_type);
+                track.cover_art = Some(cover_data.to_vec());
+                eprintln!("Extracted cover art from {}: {} bytes", path.display(), cover_data.len());
             }
+        }
         }
 
         // Try to get duration (id3 doesn't provide this directly)

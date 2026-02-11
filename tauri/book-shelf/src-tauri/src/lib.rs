@@ -39,26 +39,15 @@ pub fn run() {
             // Category commands
             get_all_categories,
             get_category_by_id,
-            create_category,
-            update_category,
-            delete_category,
             // Book commands
             get_all_books,
             get_book_by_id,
             get_books_by_category,
-            create_book,
-            update_book,
-            delete_book,
             // Chapter commands
             get_chapters_by_book,
             get_chapter_by_id,
-            create_chapter,
-            update_chapter,
-            delete_chapter,
             // Import commands
-            import_txt_file,
-            parse_and_import_chapters,
-            detect_file_encoding,
+            import_book_atomic,
         ])
         
         .run(tauri::generate_context!())

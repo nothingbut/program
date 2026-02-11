@@ -16,8 +16,9 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
   let statusMessage = $state('加载中...');
 
   // 数据状态
-  let categories = $state<Category[]>([]);
-  let books = $state<Book[]>([]);
+  let categoryTree = $state<Category[]>([]); // 树形结构（根分类）
+  let categories = $state<Category[]>([]); // 扁平化的所有分类（用于查找）
+  let books = $state<Book[]>([]); // 所有书籍
   let chapters = $state<Chapter[]>([]);
   let isLoading = $state(true);
 
@@ -60,8 +61,15 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
   onMount(async () => {
     try {
       const data = await getCategoriesWithBooks();
-      categories = data;
-      statusMessage = `就绪 - ${categories.length} 个分类`;
+
+      // 保存树形结构
+      categoryTree = data;
+
+      // 从树形结构中提取所有分类和书籍（扁平化，用于查找）
+      categories = extractAllCategories(data);
+      books = extractAllBooks(data);
+
+      statusMessage = `就绪 - ${categoryTree.length} 个分类，${books.length} 本书籍`;
     } catch (error) {
       console.error('加载数据失败:', error);
       statusMessage = '加载数据失败';
@@ -70,19 +78,60 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
     }
   });
 
+  // 从分类树中提取所有分类（扁平化）
+  function extractAllCategories(categoryTree: Category[]): Category[] {
+    const allCategories: Category[] = [];
+
+    function traverse(cats: Category[]) {
+      for (const cat of cats) {
+        allCategories.push(cat);
+        // 递归处理子分类
+        if (cat.children && cat.children.length > 0) {
+          traverse(cat.children);
+        }
+      }
+    }
+
+    traverse(categoryTree);
+    return allCategories;
+  }
+
+  // 从分类树中提取所有书籍
+  function extractAllBooks(categoryTree: Category[]): Book[] {
+    const allBooks: Book[] = [];
+
+    function traverse(cats: Category[]) {
+      for (const cat of cats) {
+        // 添加当前分类下的书籍
+        if (cat.books) {
+          allBooks.push(...cat.books);
+        }
+        // 递归处理子分类
+        if (cat.children && cat.children.length > 0) {
+          traverse(cat.children);
+        }
+      }
+    }
+
+    traverse(categoryTree);
+    return allBooks;
+  }
+
   // 获取一级分类（parent_id = null）
   function getRootCategories() {
-    return categories.filter(c => c.parent_id === null);
+    return categoryTree; // 直接返回树形结构的根分类
   }
 
   // 获取子分类
   function getSubcategories(parentId: number) {
-    return categories.filter(c => c.parent_id === parentId);
+    const parent = categories.find(c => c.id === parentId);
+    return parent?.children || [];
   }
 
   // 获取分类下的书籍
   function getCategoryBooks(categoryId: number) {
-    return books.filter(b => b.category_id === categoryId);
+    const category = categories.find(c => c.id === categoryId);
+    return category?.books || [];
   }
 
   // 获取首行文字（最多30字）
@@ -207,8 +256,15 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
     // 重新加载数据
     try {
       const data = await getCategoriesWithBooks();
-      categories = data;
-      statusMessage = `导入成功！- ${categories.length} 个分类`;
+
+      // 保存树形结构
+      categoryTree = data;
+
+      // 从树形结构中提取所有分类和书籍（扁平化，用于查找）
+      categories = extractAllCategories(data);
+      books = extractAllBooks(data);
+
+      statusMessage = `导入成功！- ${categoryTree.length} 个分类，${books.length} 本书籍`;
     } catch (error) {
       console.error('重新加载数据失败:', error);
     }
@@ -284,13 +340,30 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
               <span class="text-xs text-gray-400 ml-auto">{getTotalBooks(category.id)}本</span>
             </button>
             
-            <!-- 子分类列表 -->
+            <!-- 子分类列表和根分类下的书籍 -->
             {#if expandedCategories.includes(category.id)}
               <div class="bg-gray-50">
+                <!-- 根分类下的书籍（直接归属，不在子分类中） -->
+                {#if getCategoryBooks(category.id).length > 0}
+                  <div class="bg-white border-t border-gray-100">
+                    {#each getCategoryBooks(category.id) as book (book.id)}
+                      <button
+                        class="w-full flex items-center gap-2 px-6 py-2 hover:bg-blue-50 cursor-pointer transition-colors text-left border-b border-gray-50"
+                        class:bg-blue-100={selectedBook === book.id}
+                        onclick={() => selectBook(book.id)}
+                      >
+                        <span class="text-sm">📖</span>
+                        <span class="text-sm text-gray-700 truncate flex-1">{book.title}</span>
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- 子分类列表 -->
                 {#each getSubcategories(category.id) as subcat (subcat.id)}
                   <div>
                     <!-- 二级分类 -->
-                    <button 
+                    <button
                       class="w-full flex items-center gap-2 px-6 py-2 hover:bg-gray-100 cursor-pointer transition-colors text-left"
                       class:bg-blue-50={selectedSubcategory === subcat.id}
                       onclick={() => toggleSubcategory(subcat.id)}
@@ -303,12 +376,12 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
                       <span class="text-sm font-medium text-gray-700">{subcat.name}</span>
                       <span class="text-xs text-gray-400 ml-auto">{getCategoryBooks(subcat.id).length}本</span>
                     </button>
-                    
-                    <!-- 书籍列表 -->
+
+                    <!-- 子分类下的书籍列表 -->
                     {#if expandedSubcategories.includes(subcat.id)}
                       <div class="bg-white">
                         {#each getCategoryBooks(subcat.id) as book (book.id)}
-                          <button 
+                          <button
                             class="w-full flex items-center gap-2 px-9 py-2 hover:bg-blue-50 cursor-pointer transition-colors text-left border-t border-gray-50"
                             class:bg-blue-100={selectedBook === book.id}
                             onclick={() => selectBook(book.id)}
@@ -481,5 +554,5 @@ import ImportDialog from '$lib/components/ImportDialog.svelte';
   bind:visible={showImportDialog}
   onClose={handleImportClose}
   onSuccess={handleImportSuccess}
-  categories={categories}
+  categories={categoryTree}
 />

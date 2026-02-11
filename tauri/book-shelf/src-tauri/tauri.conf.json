@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "本地书架",
         "width": 1200,
         "height": 800,
@@ -22,7 +23,26 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Capability for the main window",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "dialog:allow-open",
+            "dialog:allow-save",
+            "sql:default"
+          ]
+        }
+      ]
+    },
+    "withGlobalTauri": false
+  },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:bookshelf.db"]
     }
   },
   "bundle": {

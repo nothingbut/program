@@ -54,6 +54,39 @@
   });
 
   /**
+   * Detect image MIME type from base64 data
+   * Checks magic bytes to determine if it's PNG, JPEG, GIF, or WebP
+   */
+  function detectImageMimeType(base64Data: string): string {
+    // Decode first few characters to check magic bytes
+    const prefix = base64Data.substring(0, 12);
+
+    // PNG: starts with iVBOR (base64 of 0x89504E47)
+    if (prefix.startsWith("iVBOR")) return "image/png";
+
+    // JPEG: starts with /9j/ (base64 of 0xFFD8FF)
+    if (prefix.startsWith("/9j/")) return "image/jpeg";
+
+    // GIF: starts with R0lG (base64 of "GIF")
+    if (prefix.startsWith("R0lG")) return "image/gif";
+
+    // WebP: starts with UklGR (base64 of "RIFF")
+    if (prefix.startsWith("UklGR")) return "image/webp";
+
+    // Default to JPEG (most common for album art)
+    return "image/jpeg";
+  }
+
+  /**
+   * Get the data URL for cover art with proper MIME type detection
+   */
+  const coverArtUrl = $derived(() => {
+    if (!currentTrack?.coverArt) return null;
+    const mimeType = detectImageMimeType(currentTrack.coverArt);
+    return `data:${mimeType};base64,${currentTrack.coverArt}`;
+  });
+
+  /**
    * Handle play/pause button click
    */
   function handlePlayPause() {
@@ -135,11 +168,17 @@
   <div class="track-info">
     {#if currentTrack}
       <div class="cover-art">
-        {#if currentTrack.coverArt}
+        {#if coverArtUrl()}
           <img
-            src="data:image/jpeg;base64,{currentTrack.coverArt}"
+            src={coverArtUrl()}
             alt="Album cover"
             class="cover-image"
+            onerror={(e: Event) => {
+              // Fallback if image fails to load
+              const target = e.currentTarget as HTMLImageElement;
+              console.error("Failed to load cover art");
+              target.style.display = "none";
+            }}
           />
         {:else}
           <div class="cover-placeholder">

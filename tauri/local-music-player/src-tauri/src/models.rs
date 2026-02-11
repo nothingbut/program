@@ -42,6 +42,12 @@ pub struct Track {
     pub year: Option<u32>,
     pub genre: Option<String>,
     pub duration: f64, // seconds
+    #[serde(
+        serialize_with = "serialize_cover_art_as_base64",
+        deserialize_with = "deserialize_cover_art_from_base64",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub cover_art: Option<Vec<u8>>, // raw image data
 }
 
@@ -73,6 +79,46 @@ impl Track {
             use base64::Engine;
             base64::engine::general_purpose::STANDARD.encode(data)
         })
+    }
+}
+
+/// Custom serializer for cover_art: converts Vec<u8> to base64 string
+fn serialize_cover_art_as_base64<S>(
+    cover_art: &Option<Vec<u8>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match cover_art {
+        Some(data) => {
+            use base64::Engine;
+            let base64_string = base64::engine::general_purpose::STANDARD.encode(data);
+            serializer.serialize_some(&base64_string)
+        }
+        None => serializer.serialize_none(),
+    }
+}
+
+/// Custom deserializer for cover_art: converts base64 string back to Vec<u8>
+fn deserialize_cover_art_from_base64<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<u8>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(base64_string) if !base64_string.is_empty() => {
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD
+                .decode(&base64_string)
+                .map(Some)
+                .map_err(D::Error::custom)
+        }
+        _ => Ok(None), // Handle None or empty string
     }
 }
 

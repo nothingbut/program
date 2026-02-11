@@ -24,6 +24,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2.3.1", features = ["sqlite"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 dirs = "6.0.0"
 chrono = "0.4.43"
 regex = "1.12.2"

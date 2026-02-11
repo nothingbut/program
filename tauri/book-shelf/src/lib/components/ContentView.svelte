@@ -8,10 +8,10 @@
   let viewMode = $state<'book_info' | 'chapter'>('book_info');
 
   // 监听选中的章节变化
-  $effect(async () => {
+  $effect(() => {
     if (appStore.selectedChapter) {
       viewMode = 'chapter';
-      await loadChapterContent();
+      loadChapterContent();
     } else if (appStore.selectedBook) {
       viewMode = 'book_info';
     } else {
