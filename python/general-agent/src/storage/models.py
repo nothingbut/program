@@ -1,7 +1,7 @@
 """数据模型定义"""
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 @dataclass
@@ -12,9 +12,9 @@ class Message:
     role: str  # 'user' | 'assistant' | 'system'
     content: str
     timestamp: datetime
-    metadata: Optional[dict] = None
+    metadata: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         data['timestamp'] = self.timestamp.isoformat()
@@ -28,9 +28,9 @@ class Session:
     title: str
     created_at: datetime
     updated_at: datetime
-    metadata: Optional[dict] = None
+    metadata: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         data['created_at'] = self.created_at.isoformat()
