@@ -21,6 +21,7 @@ class Database:
         """初始化数据库和表结构"""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = await aiosqlite.connect(str(self.db_path))
+        self.conn.row_factory = aiosqlite.Row
 
         # 创建会话表
         await self.conn.execute("""
@@ -107,11 +108,11 @@ class Database:
                     return None
 
                 return Session(
-                    id=row[0],
-                    title=row[1],
-                    created_at=datetime.fromisoformat(row[2]),
-                    updated_at=datetime.fromisoformat(row[3]),
-                    metadata=self._parse_metadata(row[4], f"session {session_id}")
+                    id=row['id'],
+                    title=row['title'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']),
+                    metadata=self._parse_metadata(row['metadata'], f"session {session_id}")
                 )
         except Exception as e:
             logger.error(f"Failed to get session {session_id}: {e}")
@@ -161,12 +162,12 @@ class Database:
                 messages = []
                 for row in rows:
                     messages.append(Message(
-                        id=row[0],
-                        session_id=row[1],
-                        role=row[2],
-                        content=row[3],
-                        timestamp=datetime.fromisoformat(row[4]),
-                        metadata=self._parse_metadata(row[5], f"message {row[0]}")
+                        id=row['id'],
+                        session_id=row['session_id'],
+                        role=row['role'],
+                        content=row['content'],
+                        timestamp=datetime.fromisoformat(row['timestamp']),
+                        metadata=self._parse_metadata(row['metadata'], f"message {row['id']}")
                     ))
                 return messages
         except Exception as e:
@@ -196,12 +197,12 @@ class Database:
                 messages = []
                 for row in rows:
                     messages.append(Message(
-                        id=row[0],
-                        session_id=row[1],
-                        role=row[2],
-                        content=row[3],
-                        timestamp=datetime.fromisoformat(row[4]),
-                        metadata=self._parse_metadata(row[5], f"message {row[0]}")
+                        id=row['id'],
+                        session_id=row['session_id'],
+                        role=row['role'],
+                        content=row['content'],
+                        timestamp=datetime.fromisoformat(row['timestamp']),
+                        metadata=self._parse_metadata(row['metadata'], f"message {row['id']}")
                     ))
                 # 反转顺序（最旧的在前）
                 return list(reversed(messages))
