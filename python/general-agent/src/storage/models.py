@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class Message:
     """消息模型"""
     id: str
@@ -21,7 +21,7 @@ class Message:
         return data
 
 
-@dataclass
+@dataclass(frozen=True)
 class Session:
     """会话模型"""
     id: str
