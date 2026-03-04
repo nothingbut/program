@@ -1,6 +1,8 @@
 """FastAPI application entry point"""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from .api import routes
@@ -71,7 +73,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routes
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Templates
+templates = Jinja2Templates(directory="templates")
+
+
+@app.get("/")
+async def index(request: Request):
+    """Serve the main page"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+# Register API routes
 app.include_router(routes.router)
 
 # Lifecycle events
