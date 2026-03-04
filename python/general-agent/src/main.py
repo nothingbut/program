@@ -11,6 +11,8 @@ from .storage.database import Database
 from .core.executor import AgentExecutor
 from .core.router import SimpleRouter
 from .core.llm_client import MockLLMClient
+from .core.ollama_client import OllamaClient, OllamaConfig
+import os
 from .skills.loader import SkillLoader
 from .skills.registry import SkillRegistry
 from .skills.executor import SkillExecutor
@@ -72,7 +74,20 @@ async def startup() -> None:
 
     # Initialize executor
     router_instance = SimpleRouter()
-    llm_client = MockLLMClient()
+
+    # Use Ollama if configured, otherwise fall back to Mock
+    use_ollama = os.getenv("USE_OLLAMA", "false").lower() == "true"
+    if use_ollama:
+        ollama_config = OllamaConfig(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            model=os.getenv("OLLAMA_MODEL", "llama3.2:latest"),
+            temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))
+        )
+        llm_client = OllamaClient(config=ollama_config)
+        logger.info(f"Using Ollama client with model: {ollama_config.model}")
+    else:
+        llm_client = MockLLMClient()
+        logger.info("Using Mock LLM client")
 
     # Create skill executor if skills are loaded
     skill_executor = None
