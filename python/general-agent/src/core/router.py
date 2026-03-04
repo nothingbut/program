@@ -5,8 +5,9 @@ the appropriate execution plan. In the MVP version, all inputs are routed to
 simple_query with LLM processing.
 """
 
+import re
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Dict
 
 
 @dataclass(frozen=True)
@@ -33,22 +34,29 @@ class ExecutionPlan:
 class SimpleRouter:
     """Simple router for user input.
 
-    Routes user input to appropriate execution plans. In the MVP version,
-    all inputs are routed to simple_query with requires_llm=True.
+    Routes user input to appropriate execution plans. Supports:
+    - Skill detection (@skill or /skill syntax)
+    - Parameter parsing (key='value' or key="value")
+    - Simple query routing (default)
 
     Future versions will add:
     - Intent recognition (greeting, question, command)
-    - Skill detection
     - MCP tool routing
     - RAG requirement detection
     """
+
+    # Pattern to detect skill invocation: @skill or /skill
+    SKILL_PATTERN = re.compile(r'^[@/](\S+)')
+
+    # Pattern to parse parameters: key='value' or key="value"
+    PARAM_PATTERN = re.compile(r"(\w+)=['\"]([^'\"]+)['\"]")
 
     def route(self, user_input: str, context: Any = None) -> ExecutionPlan:
         """Route user input to an execution plan.
 
         Args:
             user_input: The user's input string to route
-            context: Optional context for routing decisions (unused in MVP)
+            context: Optional context for routing decisions
 
         Returns:
             ExecutionPlan with routing decisions
@@ -60,8 +68,12 @@ class SimpleRouter:
         if not user_input or not user_input.strip():
             raise ValueError("User input cannot be empty")
 
-        # MVP: Route all inputs to simple_query with LLM
-        # Future: Add intent recognition, skill detection, etc.
+        # Check for skill invocation
+        skill_match = self.SKILL_PATTERN.match(user_input.strip())
+        if skill_match:
+            return self._route_skill(user_input.strip())
+
+        # Default: route to simple_query with LLM
         return ExecutionPlan(
             type="simple_query",
             requires_llm=True,
@@ -69,3 +81,51 @@ class SimpleRouter:
             requires_tools=False,
             metadata=None
         )
+
+    def _route_skill(self, user_input: str) -> ExecutionPlan:
+        """Route skill invocation to execution plan.
+
+        Args:
+            user_input: User input starting with @ or /
+
+        Returns:
+            ExecutionPlan with type="skill" and parsed metadata
+        """
+        # Extract skill name
+        skill_match = self.SKILL_PATTERN.match(user_input)
+        skill_name = skill_match.group(1)
+
+        # Parse parameters
+        parameters = self._parse_parameters(user_input)
+
+        return ExecutionPlan(
+            type="skill",
+            requires_llm=True,  # Skills need LLM for execution
+            requires_rag=False,
+            requires_tools=False,
+            metadata={
+                "skill_name": skill_name,
+                "parameters": parameters
+            }
+        )
+
+    def _parse_parameters(self, user_input: str) -> Dict[str, str]:
+        """Parse parameters from skill invocation.
+
+        Supports: key='value' or key="value" syntax
+
+        Args:
+            user_input: User input string
+
+        Returns:
+            Dictionary of parameter key-value pairs
+        """
+        parameters = {}
+
+        # Find all parameter matches
+        for match in self.PARAM_PATTERN.finditer(user_input):
+            param_name = match.group(1)
+            param_value = match.group(2)
+            parameters[param_name] = param_value
+
+        return parameters

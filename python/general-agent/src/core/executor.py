@@ -3,7 +3,7 @@
 该模块提供AgentExecutor类，用于协调所有组件（数据库、路由、LLM）
 来处理用户请求。这是系统的核心编排层。
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from .router import SimpleRouter
 from .llm_client import MockLLMClient
 from .context import ContextManager
@@ -19,18 +19,23 @@ class AgentExecutor:
     3. 路由到适当的执行计划
     4. 调用LLM处理请求
     5. 保存对话历史
+    6. 执行技能（如果已配置）
 
     Attributes:
         db: 数据库实例，用于持久化会话和消息
         router: 路由器实例，用于决策执行计划
         llm_client: LLM客户端实例，用于生成响应
+        skill_registry: 技能注册表（可选）
+        skill_executor: 技能执行器（可选）
     """
 
     def __init__(
         self,
         db: Database,
         router: SimpleRouter,
-        llm_client: MockLLMClient
+        llm_client: MockLLMClient,
+        skill_registry: Optional[Any] = None,
+        skill_executor: Optional[Any] = None
     ) -> None:
         """初始化执行器
 
@@ -38,10 +43,14 @@ class AgentExecutor:
             db: 数据库实例
             router: 路由器实例
             llm_client: LLM客户端实例
+            skill_registry: 技能注册表实例（可选）
+            skill_executor: 技能执行器实例（可选）
         """
         self.db = db
         self.router = router
         self.llm_client = llm_client
+        self.skill_registry = skill_registry
+        self.skill_executor = skill_executor
 
     async def execute(self, user_input: str, session_id: str) -> Dict[str, Any]:
         """执行用户请求
@@ -87,19 +96,31 @@ class AgentExecutor:
         # 5. 执行计划
         if plan.type == "simple_query":
             response = await self._execute_simple_query(ctx)
+            success = True
+            error = None
+        elif plan.type == "skill":
+            response, success, error = await self._execute_skill(plan)
         else:
-            # 未来：处理其他类型（task、skill、mcp）
+            # 未来：处理其他类型（task、mcp）
             response = "暂不支持该类型的请求"
+            success = False
+            error = "Unsupported plan type"
 
         # 6. 保存助手回复
         await ctx.add_message("assistant", response)
 
         # 7. 返回结果
-        return {
+        result = {
             "response": response,
             "session_id": session_id,
-            "plan_type": plan.type
+            "plan_type": plan.type,
+            "success": success
         }
+
+        if error:
+            result["error"] = error
+
+        return result
 
     async def _execute_simple_query(self, ctx: ContextManager) -> str:
         """执行简单问答
@@ -119,3 +140,56 @@ class AgentExecutor:
         response = await self.llm_client.chat(messages)
 
         return response
+
+    async def _execute_skill(self, plan: Any) -> tuple[str, bool, Optional[str]]:
+        """执行技能
+
+        Args:
+            plan: ExecutionPlan with skill metadata
+
+        Returns:
+            Tuple of (response, success, error)
+        """
+        # Check if skill system is configured
+        if not self.skill_registry or not self.skill_executor:
+            return (
+                "技能系统未配置。请在启动时初始化技能注册表和执行器。",
+                False,
+                "Skill system not configured"
+            )
+
+        # Extract metadata
+        metadata = plan.metadata or {}
+        skill_name = metadata.get("skill_name")
+        parameters = metadata.get("parameters", {})
+
+        if not skill_name:
+            return (
+                "技能名称缺失。请使用 @skill-name 或 /skill-name 格式。",
+                False,
+                "Missing skill name"
+            )
+
+        # Get skill from registry
+        try:
+            skill = self.skill_registry.get(skill_name)
+        except Exception as e:
+            error_msg = f"技能 '{skill_name}' 未找到。错误: {str(e)}"
+            return (error_msg, False, f"Skill not found: {skill_name}")
+
+        # Execute skill
+        try:
+            result = await self.skill_executor.execute(skill, parameters)
+
+            if result.success:
+                return (result.output, True, None)
+            else:
+                return (
+                    f"技能执行失败: {result.error}",
+                    False,
+                    result.error
+                )
+
+        except Exception as e:
+            error_msg = f"技能执行出错: {str(e)}"
+            return (error_msg, False, str(e))
