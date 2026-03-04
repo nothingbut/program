@@ -1,1 +1,1 @@
-"""MCP模块测试."""
+"""Tests for MCP integration."""
