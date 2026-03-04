@@ -1,5 +1,4 @@
 """测试数据模型"""
-import pytest
 from datetime import datetime
 from src.storage.models import Message, Session
 
