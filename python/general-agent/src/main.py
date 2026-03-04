@@ -1,4 +1,5 @@
 """FastAPI application entry point"""
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,10 +11,16 @@ from .storage.database import Database
 from .core.executor import AgentExecutor
 from .core.router import SimpleRouter
 from .core.llm_client import MockLLMClient
+from .skills.loader import SkillLoader
+from .skills.registry import SkillRegistry
+from .skills.executor import SkillExecutor
+
+logger = logging.getLogger(__name__)
 
 # Global singletons (MVP pattern)
 _db: Database | None = None
 _executor: AgentExecutor | None = None
+_skill_registry: SkillRegistry | None = None
 
 
 def get_db() -> Database:
@@ -33,18 +40,52 @@ def get_executor() -> AgentExecutor:
 
 
 async def startup() -> None:
-    """Initialize database and executor on startup"""
-    global _db, _executor
+    """Initialize database, skills, and executor on startup"""
+    global _db, _executor, _skill_registry
 
     # Initialize database
     db_path = Path("data/general_agent.db")
     _db = Database(db_path)
     await _db.initialize()
 
+    # Initialize skill system
+    skills_dir = Path("skills")
+    if skills_dir.exists():
+        try:
+            # Load skills from filesystem
+            loader = SkillLoader(skills_dir)
+            skills = loader.load_all()
+
+            # Register skills
+            _skill_registry = SkillRegistry()
+            for skill in skills:
+                _skill_registry.register(skill)
+
+            logger.info(f"Loaded {len(skills)} skills from {skills_dir}")
+
+        except Exception as e:
+            logger.warning(f"Failed to load skills: {e}")
+            _skill_registry = None
+    else:
+        logger.info(f"Skills directory not found: {skills_dir}")
+        _skill_registry = None
+
     # Initialize executor
     router_instance = SimpleRouter()
     llm_client = MockLLMClient()
-    _executor = AgentExecutor(_db, router_instance, llm_client)
+
+    # Create skill executor if skills are loaded
+    skill_executor = None
+    if _skill_registry:
+        skill_executor = SkillExecutor(llm_client)
+
+    _executor = AgentExecutor(
+        _db,
+        router_instance,
+        llm_client,
+        skill_registry=_skill_registry,
+        skill_executor=skill_executor
+    )
 
     # Set dependencies for routes
     routes.set_dependencies(get_db, get_executor)
