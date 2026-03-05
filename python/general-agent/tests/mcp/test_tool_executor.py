@@ -164,3 +164,50 @@ async def test_call_tool_path_outside_whitelist():
         )
 
     assert "outside allowed directories" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_tool_discovery_caching(mock_mcp_connection):
+    """Test tool discovery results are cached."""
+    from src.mcp.tool_executor import MCPToolExecutor
+
+    manager = AsyncMock()
+    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+
+    security = AsyncMock()
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    # First call
+    tools1 = await executor.discover_tools("filesystem")
+
+    # Second call
+    tools2 = await executor.discover_tools("filesystem")
+
+    # Should return cached results
+    assert tools1 is tools2
+    # Connection should only be called once
+    manager.get_connection.assert_called_once()
+    mock_mcp_connection.list_tools.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_tool_discovery_different_servers(mock_mcp_connection):
+    """Test different servers have separate caches."""
+    from src.mcp.tool_executor import MCPToolExecutor
+
+    manager = AsyncMock()
+    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+
+    security = AsyncMock()
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    # Discover from two different servers
+    await executor.discover_tools("filesystem")
+    await executor.discover_tools("github")
+
+    # Should call connection twice (once per server)
+    assert manager.get_connection.call_count == 2
