@@ -22,9 +22,10 @@
 - 5个示例技能（personal, productivity）
 
 ### 未来版本
-- MCP集成（Phase 3）
-- RAG引擎（Phase 4）
-- 高级功能（Phase 5-6）
+- 🚧 MCP集成（Phase 3）
+- 🚧 RAG引擎（Phase 4）
+- 📋 TUI终端界面（Phase 5）- 基于Textual的本地命令行交互
+- 📋 高级功能（Phase 6+）
 
 ## 快速开始
 
@@ -38,13 +39,23 @@ uv pip install -e ".[dev]"
 pip install -e ".[dev]"
 ```
 
-### 2. 运行测试
+### 2. 配置 LLM（可选）
+
+```bash
+# 使用本地 Ollama 模型（推荐）
+cp .env.example .env
+# 编辑 .env，设置 USE_OLLAMA=true
+
+# 详细配置指南：docs/OLLAMA_SETUP.md
+```
+
+### 3. 运行测试
 
 ```bash
 pytest
 ```
 
-### 3. 启动服务
+### 4. 启动服务
 
 ```bash
 uvicorn src.main:app --reload
@@ -140,6 +151,8 @@ mypy src/
 ## 文档
 
 - 📖 **[技能系统文档](docs/skills.md)** - 完整的技能系统指南
+- 🤖 **[Ollama配置指南](docs/OLLAMA_SETUP.md)** - 本地模型配置
+- ✅ **[验收测试指南](docs/ACCEPTANCE_TEST.md)** - Phase 1&2 验收
 - 📋 **[设计文档](docs/plans/2026-03-02-general-agent-design.md)** - 系统架构设计
 - 🚀 **[Phase 1 计划](docs/plans/2026-03-02-phase1-foundation.md)** - 基础设施实现
 - 🎯 **[Phase 2 计划](docs/plans/2026-03-02-phase2-skill-system.md)** - 技能系统实现

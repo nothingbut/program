@@ -85,5 +85,24 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ConnectionError as e:
+        # Ollama连接错误
+        raise HTTPException(
+            status_code=503,
+            detail=f"无法连接到Ollama服务: {str(e)}。请确保Ollama正在运行 (ollama serve)"
+        )
+    except TimeoutError as e:
+        # 超时错误
+        raise HTTPException(
+            status_code=504,
+            detail=f"请求超时: {str(e)}。模型响应时间过长，建议切换到更快的模型或增加超时时间"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        # 其他错误 - 提供更详细的信息
+        error_msg = str(e)
+        if "Ollama" in error_msg or "model" in error_msg.lower():
+            detail = f"Ollama错误: {error_msg}"
+        else:
+            detail = f"处理请求时出错: {error_msg}"
+
+        raise HTTPException(status_code=500, detail=detail)

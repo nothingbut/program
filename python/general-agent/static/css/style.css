@@ -122,3 +122,57 @@ footer {
     color: #28a745;
     font-weight: 500;
 }
+
+/* 错误提示横幅 */
+.error-banner {
+    background: #dc3545;
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid #c82333;
+    animation: slideDown 0.3s ease;
+}
+
+.error-banner.hidden {
+    display: none;
+}
+
+#error-message {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
+.close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}

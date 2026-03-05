@@ -15,7 +15,7 @@ class OllamaConfig:
     base_url: str = "http://localhost:11434"
     model: str = "llama3.2:latest"
     temperature: float = 0.7
-    timeout: float = 30.0
+    timeout: float = 120.0  # 增加到120秒，适应大模型
 
 
 class OllamaClient:

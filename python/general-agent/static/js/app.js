@@ -8,6 +8,9 @@ async function sendMessage() {
 
     if (!message) return;
 
+    // 关闭之前的错误提示
+    closeErrorBanner();
+
     // 显示用户消息
     appendMessage('user', message);
 
@@ -18,6 +21,9 @@ async function sendMessage() {
     const sendBtn = document.getElementById('send-btn');
     sendBtn.disabled = true;
     sendBtn.textContent = '发送中...';
+
+    // 更新状态为处理中
+    updateStatus('处理中...', '#667eea');
 
     try {
         // 发送请求
@@ -32,6 +38,13 @@ async function sendMessage() {
             })
         });
 
+        // 检查HTTP状态
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = errorData.detail || `服务器错误 (${response.status})`;
+            throw new Error(errorMsg);
+        }
+
         const data = await response.json();
 
         // 保存session_id
@@ -39,18 +52,72 @@ async function sendMessage() {
             currentSessionId = data.session_id;
         }
 
+        // 检查响应是否为空
+        if (!data.response || data.response.trim() === '') {
+            showError('⚠️ AI返回了空响应，请稍后重试或检查模型配置');
+            updateStatus('错误', '#dc3545');
+            return;
+        }
+
+        // 检查是否有错误标志
+        if (data.success === false) {
+            const errorMsg = data.error || '未知错误';
+            showError(`❌ AI处理失败: ${errorMsg}`);
+            appendMessage('assistant', `抱歉，处理您的请求时出错了: ${errorMsg}`);
+            updateStatus('错误', '#dc3545');
+            return;
+        }
+
         // 显示助手回复
         appendMessage('assistant', data.response);
+        updateStatus('已连接', '#28a745');
 
     } catch (error) {
         console.error('Error:', error);
-        appendMessage('assistant', '抱歉，发生了错误。请稍后再试。');
-        updateStatus('错误', 'red');
+
+        // 区分不同类型的错误
+        let errorMessage = '';
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            errorMessage = '❌ 无法连接到服务器，请检查服务器是否运行';
+        } else if (error.message.includes('timeout') || error.message.includes('超时')) {
+            errorMessage = '⏱️ 请求超时，可能是模型响应太慢。建议：\n1. 等待更长时间\n2. 或切换到更快的模型（如 llama3.2:3b）';
+        } else if (error.message.includes('Ollama')) {
+            errorMessage = `🤖 Ollama 错误: ${error.message}`;
+        } else {
+            errorMessage = `❌ 错误: ${error.message}`;
+        }
+
+        showError(errorMessage);
+        appendMessage('assistant', '抱歉，发生了错误。请查看页面顶部的错误提示。');
+        updateStatus('错误', '#dc3545');
+
     } finally {
         // 恢复发送按钮
         sendBtn.disabled = false;
         sendBtn.textContent = '发送';
     }
+}
+
+// 显示错误提示
+function showError(message) {
+    const banner = document.getElementById('error-banner');
+    const errorMsg = document.getElementById('error-message');
+
+    errorMsg.textContent = message;
+    banner.classList.remove('hidden');
+
+    // 5秒后自动隐藏（除非是超时错误）
+    if (!message.includes('超时') && !message.includes('timeout')) {
+        setTimeout(() => {
+            closeErrorBanner();
+        }, 10000);
+    }
+}
+
+// 关闭错误提示
+function closeErrorBanner() {
+    const banner = document.getElementById('error-banner');
+    banner.classList.add('hidden');
 }
 
 // 添加消息到界面
