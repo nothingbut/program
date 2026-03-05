@@ -20,6 +20,7 @@ class AgentExecutor:
     4. 调用LLM处理请求
     5. 保存对话历史
     6. 执行技能（如果已配置）
+    7. 执行MCP工具（如果已配置）
 
     Attributes:
         db: 数据库实例，用于持久化会话和消息
@@ -27,6 +28,7 @@ class AgentExecutor:
         llm_client: LLM客户端实例，用于生成响应
         skill_registry: 技能注册表（可选）
         skill_executor: 技能执行器（可选）
+        mcp_executor: MCP工具执行器（可选）
     """
 
     def __init__(
@@ -35,7 +37,8 @@ class AgentExecutor:
         router: SimpleRouter,
         llm_client: MockLLMClient,
         skill_registry: Optional[Any] = None,
-        skill_executor: Optional[Any] = None
+        skill_executor: Optional[Any] = None,
+        mcp_executor: Optional[Any] = None
     ) -> None:
         """初始化执行器
 
@@ -45,12 +48,14 @@ class AgentExecutor:
             llm_client: LLM客户端实例
             skill_registry: 技能注册表实例（可选）
             skill_executor: 技能执行器实例（可选）
+            mcp_executor: MCP工具执行器实例（可选）
         """
         self.db = db
         self.router = router
         self.llm_client = llm_client
         self.skill_registry = skill_registry
         self.skill_executor = skill_executor
+        self.mcp_executor = mcp_executor
 
     async def execute(self, user_input: str, session_id: str) -> Dict[str, Any]:
         """执行用户请求
@@ -94,14 +99,17 @@ class AgentExecutor:
         plan = self.router.route(user_input, context=ctx)
 
         # 5. 执行计划
-        if plan.type == "simple_query":
+        if plan.type == "mcp":
+            # MCP tool execution (highest priority for explicit calls)
+            response, success, error = await self._execute_mcp(plan, session_id)
+        elif plan.type == "skill":
+            response, success, error = await self._execute_skill(plan)
+        elif plan.type == "simple_query":
             response = await self._execute_simple_query(ctx)
             success = True
             error = None
-        elif plan.type == "skill":
-            response, success, error = await self._execute_skill(plan)
         else:
-            # 未来：处理其他类型（task、mcp）
+            # 未来：处理其他类型（task）
             response = "暂不支持该类型的请求"
             success = False
             error = "Unsupported plan type"
@@ -192,4 +200,73 @@ class AgentExecutor:
 
         except Exception as e:
             error_msg = f"技能执行出错: {str(e)}"
+            return (error_msg, False, str(e))
+
+    async def _execute_mcp(
+        self,
+        plan: Any,
+        session_id: str
+    ) -> tuple[str, bool, Optional[str]]:
+        """执行MCP工具调用
+
+        处理三种情况：
+        1. 成功 → 返回工具结果
+        2. 需要确认 → 返回确认提示
+        3. 拒绝 → 返回错误信息
+
+        Args:
+            plan: ExecutionPlan (包含server、tool、arguments)
+            session_id: 会话ID
+
+        Returns:
+            Tuple of (response, success, error)
+        """
+        if not self.mcp_executor:
+            return (
+                "MCP工具系统未配置。请在启动时初始化MCP执行器。",
+                False,
+                "MCP executor not configured"
+            )
+
+        # Import exceptions here to avoid circular imports
+        from ..mcp.exceptions import (
+            PermissionDeniedError,
+            ConfirmationRequired,
+            MCPToolError
+        )
+
+        # Extract metadata
+        metadata = plan.metadata or {}
+        server_name = metadata.get("server")
+        tool_name = metadata.get("tool")
+        arguments = metadata.get("arguments", {})
+
+        try:
+            result = await self.mcp_executor.call_tool(
+                server_name=server_name,
+                tool_name=tool_name,
+                arguments=arguments,
+                session_id=session_id
+            )
+
+            response = f"Tool executed successfully:\n{result}"
+            return (response, True, None)
+
+        except ConfirmationRequired as e:
+            # Requires user confirmation
+            return (e.prompt, False, "confirmation_required")
+
+        except PermissionDeniedError as e:
+            # Permission denied
+            error_msg = f"Permission denied: {e.reason}"
+            return (error_msg, False, str(e))
+
+        except MCPToolError as e:
+            # Tool execution error
+            error_msg = f"Tool execution failed: {str(e)}"
+            return (error_msg, False, str(e))
+
+        except Exception as e:
+            # Unexpected error
+            error_msg = f"MCP execution error: {str(e)}"
             return (error_msg, False, str(e))
