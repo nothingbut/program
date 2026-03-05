@@ -604,3 +604,103 @@ async def test_get_recent_messages_with_closed_connection(test_db_path: Path):
     # 应触发异常处理并返回空列表
     messages = await db.get_recent_messages("sess-1")
     assert messages == []
+
+
+@pytest.mark.asyncio
+async def test_log_mcp_operation(test_db_path: Path):
+    """Test logging MCP operation to audit trail."""
+    db = Database(test_db_path)
+    await db.initialize()
+
+    # Create session first
+    session = Session(
+        id="session_1",
+        title="Test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    await db.create_session(session)
+
+    await db.log_mcp_operation(
+        session_id="session_1",
+        server="filesystem",
+        tool="read_file",
+        arguments={"path": "/tmp/test.txt"},
+        status="success",
+        result={"content": "test"},
+        timestamp=datetime.now()
+    )
+
+    # Verify log was created
+    logs = await db.get_mcp_audit_logs("session_1")
+    assert len(logs) == 1
+    assert logs[0]["server"] == "filesystem"
+    assert logs[0]["tool"] == "read_file"
+    assert logs[0]["status"] == "success"
+
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_audit_logs_multiple(test_db_path: Path):
+    """Test retrieving multiple audit logs."""
+    db = Database(test_db_path)
+    await db.initialize()
+
+    # Create session first
+    session = Session(
+        id="session_1",
+        title="Test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    await db.create_session(session)
+
+    # Log multiple operations
+    await db.log_mcp_operation(
+        "session_1", "filesystem", "read_file",
+        {"path": "/tmp/1.txt"}, "success",
+        timestamp=datetime.now()
+    )
+    await db.log_mcp_operation(
+        "session_1", "filesystem", "write_file",
+        {"path": "/tmp/2.txt"}, "denied",
+        timestamp=datetime.now()
+    )
+
+    logs = await db.get_mcp_audit_logs("session_1")
+    assert len(logs) == 2
+
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_mcp_audit_log_with_error(test_db_path: Path):
+    """Test logging failed operation with error."""
+    db = Database(test_db_path)
+    await db.initialize()
+
+    # Create session first
+    session = Session(
+        id="session_1",
+        title="Test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    await db.create_session(session)
+
+    await db.log_mcp_operation(
+        session_id="session_1",
+        server="filesystem",
+        tool="read_file",
+        arguments={"path": "/nonexistent.txt"},
+        status="failed",
+        error="File not found",
+        timestamp=datetime.now()
+    )
+
+    logs = await db.get_mcp_audit_logs("session_1")
+    assert logs[0]["status"] == "failed"
+    assert logs[0]["error"] == "File not found"
+
+    await db.close()

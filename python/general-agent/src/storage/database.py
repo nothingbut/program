@@ -2,9 +2,10 @@
 import aiosqlite
 import json
 import logging
+import uuid
 from pathlib import Path
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from .models import Message, Session
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,33 @@ class Database:
                 metadata TEXT,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             )
+        """)
+
+        # MCP audit logs table
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS mcp_audit_logs (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                server_name TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                arguments TEXT NOT NULL,
+                result TEXT,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                timestamp TIMESTAMP NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+        """)
+
+        # Indexes for performance
+        await self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_mcp_logs_session
+            ON mcp_audit_logs(session_id)
+        """)
+
+        await self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_mcp_logs_timestamp
+            ON mcp_audit_logs(timestamp)
         """)
 
         await self.conn.commit()
@@ -208,4 +236,110 @@ class Database:
                 return list(reversed(messages))
         except Exception as e:
             logger.error(f"Failed to get recent messages for session {session_id}: {e}")
+            return []
+
+    async def log_mcp_operation(
+        self,
+        session_id: str,
+        server: str,
+        tool: str,
+        arguments: dict,
+        status: str,
+        result: Any = None,
+        error: str = None,
+        timestamp: datetime = None
+    ) -> None:
+        """Log MCP operation to audit trail.
+
+        Args:
+            session_id: Session ID
+            server: MCP server name
+            tool: Tool name
+            arguments: Tool arguments
+            status: Operation status (success/denied/failed)
+            result: Tool result (optional)
+            error: Error message (optional)
+            timestamp: Operation timestamp
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        if timestamp is None:
+            timestamp = datetime.now()
+
+        log_id = str(uuid.uuid4())
+
+        try:
+            await self.conn.execute(
+                """
+                INSERT INTO mcp_audit_logs
+                (id, session_id, server_name, tool_name, arguments, result, status, error_message, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    log_id,
+                    session_id,
+                    server,
+                    tool,
+                    json.dumps(arguments),
+                    json.dumps(result) if result else None,
+                    status,
+                    error,
+                    timestamp.isoformat()
+                )
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to log MCP operation: {e}")
+            raise
+
+    async def get_mcp_audit_logs(
+        self,
+        session_id: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get MCP audit logs for a session.
+
+        Args:
+            session_id: Session ID
+            limit: Maximum number of logs to return
+
+        Returns:
+            List of audit log dictionaries
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            cursor = await self.conn.execute(
+                """
+                SELECT id, session_id, server_name, tool_name, arguments,
+                       result, status, error_message, timestamp
+                FROM mcp_audit_logs
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (session_id, limit)
+            )
+            rows = await cursor.fetchall()
+
+            logs = []
+            for row in rows:
+                logs.append({
+                    "id": row[0],
+                    "session_id": row[1],
+                    "server": row[2],
+                    "tool": row[3],
+                    "arguments": json.loads(row[4]),
+                    "result": json.loads(row[5]) if row[5] else None,
+                    "status": row[6],
+                    "error": row[7],
+                    "timestamp": row[8]
+                })
+
+            return logs
+        except Exception as e:
+            logger.error(f"Failed to get MCP audit logs for session {session_id}: {e}")
             return []
