@@ -12,7 +12,9 @@ from .embeddings import create_embedding_provider, EmbeddingProvider
 from .storage import create_vector_store, VectorStore
 from .chunking import create_chunker, Chunker
 from .loaders import create_loader
-from .exceptions import IndexingError
+from .retrieval import SemanticRetriever, RetrievalResult
+from .retrieval import utils as retrieval_utils
+from .exceptions import IndexingError, RetrievalError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,13 @@ class RAGEngine:
             dimension=config.embedding.dimension
         )
         self.chunker = create_chunker(config.chunking)
+
+        # 初始化检索器
+        self.retriever = SemanticRetriever(
+            embedding=self.embedding,
+            vector_store=self.vector_store,
+            similarity_threshold=config.retrieval.similarity_threshold
+        )
 
         logger.info(f"RAG Engine initialized with {config.vector_store.type} vector store")
 
@@ -391,3 +400,116 @@ class RAGEngine:
             documents=documents,
             metadatas=metadatas
         )
+
+    async def retrieve(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        rerank: bool = True
+    ) -> List[RetrievalResult]:
+        """
+        检索相关文档
+
+        Args:
+            query: 查询文本
+            top_k: 返回结果数量（默认使用配置中的值）
+            filters: 元数据过滤条件（可选）
+            rerank: 是否重新排序（默认 True）
+
+        Returns:
+            检索结果列表
+
+        Raises:
+            RetrievalError: 检索失败
+        """
+        try:
+            # 使用配置默认值
+            if top_k is None:
+                top_k = self.config.retrieval.top_k
+
+            # 执行检索
+            results = await self.retriever.retrieve(
+                query=query,
+                top_k=top_k,
+                filters=filters
+            )
+
+            # 重新排序（如果需要）
+            if rerank and len(results) > 1:
+                results = retrieval_utils.rerank_by_score(results)
+
+            logger.info(f"Retrieved {len(results)} documents for query: {query[:50]}...")
+
+            return results
+
+        except Exception as e:
+            raise RetrievalError(f"Failed to retrieve documents: {e}")
+
+    async def query(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        max_context_tokens: Optional[int] = None,
+        include_metadata: bool = False
+    ) -> Dict[str, Any]:
+        """
+        完整的 RAG 查询（检索 + 格式化上下文）
+
+        Args:
+            query: 查询文本
+            top_k: 返回结果数量（默认使用配置中的值）
+            filters: 元数据过滤条件（可选）
+            max_context_tokens: 最大上下文 tokens（默认使用配置中的值）
+            include_metadata: 是否在上下文中包含元数据
+
+        Returns:
+            查询结果字典:
+                - query: 查询文本
+                - results: 检索结果列表
+                - context: 格式化的上下文文本
+                - stats: 统计信息
+
+        Raises:
+            RetrievalError: 查询失败
+        """
+        try:
+            # 使用配置默认值
+            if max_context_tokens is None:
+                max_context_tokens = self.config.retrieval.max_context_tokens
+
+            # 1. 检索
+            results = await self.retrieve(
+                query=query,
+                top_k=top_k,
+                filters=filters
+            )
+
+            # 2. 截断结果（如果需要）
+            if max_context_tokens:
+                results = retrieval_utils.truncate_by_tokens(
+                    results,
+                    max_tokens=max_context_tokens
+                )
+
+            # 3. 格式化上下文
+            context = self.retriever.format_context(
+                results,
+                include_metadata=include_metadata
+            )
+
+            # 4. 构建返回结果
+            return {
+                "query": query,
+                "results": results,
+                "context": context,
+                "stats": {
+                    "total_results": len(results),
+                    "avg_score": sum(r.score for r in results) / len(results) if results else 0.0,
+                    "sources": list(set(r.metadata.get('source', 'Unknown') for r in results))
+                }
+            }
+
+        except Exception as e:
+            raise RetrievalError(f"Failed to query documents: {e}")
