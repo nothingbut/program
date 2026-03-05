@@ -49,3 +49,118 @@ async def test_tool_discovery(mock_mcp_connection, monkeypatch):
     assert len(tools) == 2
     assert tools[0]["name"] == "read_file"
     assert tools[1]["name"] == "write_file"
+
+
+@pytest.mark.asyncio
+async def test_call_tool_with_allowed_operation(mock_mcp_connection):
+    """Test calling tool with allowed operation."""
+    from src.mcp.tool_executor import MCPToolExecutor
+    from src.mcp.security import MCPSecurityLayer, SecurityConfig
+
+    manager = AsyncMock()
+    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+
+    config = SecurityConfig(
+        allowed_directories=["/tmp"],
+        allowed_operations=["read_file"],
+        denied_operations=[]
+    )
+    security = MCPSecurityLayer(config)
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    result = await executor.call_tool(
+        "filesystem",
+        "read_file",
+        {"path": "/tmp/test.txt"},
+        "session_1"
+    )
+
+    assert result["content"] == "test result"
+    mock_mcp_connection.call_tool.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_call_tool_denied_operation():
+    """Test calling denied operation raises error."""
+    from src.mcp.tool_executor import MCPToolExecutor
+    from src.mcp.security import MCPSecurityLayer, SecurityConfig
+
+    manager = AsyncMock()
+    config = SecurityConfig(
+        allowed_directories=["/tmp"],
+        allowed_operations=[],
+        denied_operations=["delete_file"]
+    )
+    security = MCPSecurityLayer(config)
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        await executor.call_tool(
+            "filesystem",
+            "delete_file",
+            {"path": "/tmp/test.txt"},
+            "session_1"
+        )
+
+    assert "denied by security policy" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_call_tool_requires_confirmation():
+    """Test undefined operation raises ConfirmationRequired."""
+    from src.mcp.tool_executor import MCPToolExecutor
+    from src.mcp.security import MCPSecurityLayer, SecurityConfig
+
+    manager = AsyncMock()
+    config = SecurityConfig(
+        allowed_directories=["/tmp"],
+        allowed_operations=["read_file"],
+        denied_operations=["delete_file"]
+    )
+    security = MCPSecurityLayer(config)
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    # write_file is neither allowed nor denied
+    with pytest.raises(ConfirmationRequired) as exc_info:
+        await executor.call_tool(
+            "filesystem",
+            "write_file",
+            {"path": "/tmp/test.txt", "content": "test"},
+            "session_1"
+        )
+
+    assert "Allow filesystem:write_file" in exc_info.value.prompt
+
+
+@pytest.mark.asyncio
+async def test_call_tool_path_outside_whitelist():
+    """Test path outside whitelist is denied."""
+    from src.mcp.tool_executor import MCPToolExecutor
+    from src.mcp.security import MCPSecurityLayer, SecurityConfig
+
+    manager = AsyncMock()
+    config = SecurityConfig(
+        allowed_directories=["/tmp"],
+        allowed_operations=["read_file"],
+        denied_operations=[]
+    )
+    security = MCPSecurityLayer(config)
+    db = AsyncMock()
+
+    executor = MCPToolExecutor(manager, security, db)
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        await executor.call_tool(
+            "filesystem",
+            "read_file",
+            {"path": "/etc/passwd"},
+            "session_1"
+        )
+
+    assert "outside allowed directories" in str(exc_info.value)
