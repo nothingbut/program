@@ -2,7 +2,7 @@
 
 **日期：** 2026-03-05
 **分支：** feature/phase-5-rag-engine
-**状态：** Phase 5.2 完成，准备 Phase 5.3
+**状态：** Phase 5.3 完成，准备 Phase 5.4
 
 ---
 
@@ -11,12 +11,12 @@
 ```
 ✅ Phase 5.1: 基础设施搭建 (100%)
 ✅ Phase 5.2: 文档处理 (100%)
-⏳ Phase 5.3: 向量存储与索引 (0%)
+✅ Phase 5.3: 向量存储与索引 (100%)
 ⏳ Phase 5.4: 检索系统 (0%)
 ⏳ Phase 5.5: 系统集成 (0%)
 ⏳ Phase 5.6: 测试与文档 (0%)
 
-总进度: 2/6 阶段完成 (33%)
+总进度: 3/6 阶段完成 (50%)
 ```
 
 ---
@@ -120,7 +120,85 @@ src/rag/utils/
 
 ---
 
-## 🎯 下一步：Phase 5.3 向量存储与索引
+### Phase 5.3: 向量存储与索引
+
+**提交：** `289550a`
+
+#### 1. 向量存储实现
+**文件：**
+```
+src/rag/storage/
+├── base.py         # VectorStore 抽象基类
+├── chromadb.py     # ChromaDB 实现
+└── factory.py      # 工厂模式
+```
+
+**功能：**
+- ChromaDB 持久化存储
+- 余弦相似度搜索
+- 完整的 CRUD 操作（add, search, update, delete, get, count, clear）
+- 批量操作支持
+- 元数据过滤
+- 维度验证
+
+**配置：**
+- 存储路径：`data/rag/vector_db`
+- Collection：`general_agent_docs`
+- 距离度量：余弦相似度
+- 禁用自动嵌入（使用自定义 BGE 模型）
+
+#### 2. 文档索引引擎
+**文件：** `src/rag/engine.py`
+
+**核心类：** `RAGEngine`
+
+**功能：**
+```python
+# 批量索引
+index_documents(path, recursive=True, show_progress=True)
+  - 自动扫描支持的文件（.md, .txt, .pdf）
+  - 批量处理（100文档/批次）
+  - 增量索引（基于文件哈希）
+  - 进度条显示
+
+# 文档管理
+update_document(file_path)  # 更新单个文档
+delete_document(file_path)  # 删除文档
+clear_index()               # 清空索引
+get_stats()                 # 统计信息
+```
+
+**索引流程：**
+1. 扫描目录 → 找到所有支持的文件
+2. 加载文档 → 使用 LoaderFactory
+3. 分块处理 → 使用 HybridChunker
+4. 向量化 → 使用 BGEEmbedding
+5. 存储 → 存入 ChromaDB
+
+**增量索引：**
+- 文件哈希检测（MD5）
+- 跳过未修改的文件
+- 自动更新已修改的文件
+
+#### 3. 测试
+**文件：**
+- `tests/rag/test_storage.py` (18个测试)
+- `tests/rag/test_engine_integration.py` (6个测试)
+
+**测试覆盖：**
+- ChromaDB 基础操作
+- 批量操作（100+文档）
+- 元数据过滤
+- 错误处理（维度不匹配、长度不匹配）
+- 端到端索引流程
+- 增量索引
+- 文档更新和删除
+
+**测试结果：** 24/24 通过 ✅
+
+---
+
+## 🎯 下一步：Phase 5.4 检索系统
 
 ### 预计工作量：2天
 
