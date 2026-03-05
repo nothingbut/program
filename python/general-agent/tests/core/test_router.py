@@ -123,3 +123,51 @@ class TestSimpleRouter:
         assert isinstance(plan, ExecutionPlan)
         assert plan.type == "simple_query"
         # Context is accepted but not used in MVP
+
+
+class TestMCPRouting:
+    """Test MCP routing functionality."""
+
+    def test_route_mcp_explicit_syntax(self):
+        """Test routing MCP explicit syntax."""
+        router = SimpleRouter()
+
+        plan = router.route("@mcp:filesystem:read_file path='/tmp/test.txt'")
+
+        assert plan.type == "mcp"
+        assert plan.requires_tools is True
+        assert plan.metadata["server"] == "filesystem"
+        assert plan.metadata["tool"] == "read_file"
+        assert plan.metadata["arguments"]["path"] == "/tmp/test.txt"
+
+    def test_route_mcp_with_multiple_arguments(self):
+        """Test MCP routing with multiple arguments."""
+        router = SimpleRouter()
+
+        plan = router.route(
+            '@mcp:filesystem:write_file path="/tmp/test.txt" content="Hello World"'
+        )
+
+        assert plan.type == "mcp"
+        assert plan.metadata["tool"] == "write_file"
+        assert plan.metadata["arguments"]["path"] == "/tmp/test.txt"
+        assert plan.metadata["arguments"]["content"] == "Hello World"
+
+    def test_route_mcp_takes_precedence_over_skill(self):
+        """Test MCP syntax takes precedence over skill."""
+        router = SimpleRouter()
+
+        # @mcp: should match before @skill:
+        plan = router.route("@mcp:filesystem:read_file path='/tmp/test.txt'")
+
+        assert plan.type == "mcp"
+
+    def test_route_invalid_mcp_syntax(self):
+        """Test invalid MCP syntax falls back to simple query."""
+        router = SimpleRouter()
+
+        # Missing colon between server and tool
+        plan = router.route("@mcp:filesystem-read_file")
+
+        # Should not match MCP pattern, fall back to simple query
+        assert plan.type == "simple_query"

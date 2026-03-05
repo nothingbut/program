@@ -35,24 +35,32 @@ class SimpleRouter:
     """Simple router for user input.
 
     Routes user input to appropriate execution plans. Supports:
+    - MCP tool detection (@mcp:server:tool syntax)
     - Skill detection (@skill or /skill syntax)
     - Parameter parsing (key='value' or key="value")
     - Simple query routing (default)
 
     Future versions will add:
     - Intent recognition (greeting, question, command)
-    - MCP tool routing
     - RAG requirement detection
     """
 
-    # Pattern to detect skill invocation: @skill or /skill
-    SKILL_PATTERN = re.compile(r'^[@/](\S+)')
+    # Pattern to detect MCP explicit invocation: @mcp:server:tool
+    MCP_PATTERN = re.compile(r'^@mcp:(\w+):(\w+)')
+
+    # Pattern to detect skill invocation: @skill or /skill (but not @mcp:)
+    SKILL_PATTERN = re.compile(r'^(?!@mcp:)[@/](\S+)')
 
     # Pattern to parse parameters: key='value' or key="value"
     PARAM_PATTERN = re.compile(r"(\w+)=['\"]([^'\"]+)['\"]")
 
     def route(self, user_input: str, context: Any = None) -> ExecutionPlan:
         """Route user input to an execution plan.
+
+        Priority order:
+        1. MCP explicit syntax (@mcp:server:tool)
+        2. Skill invocation (@skill or /skill)
+        3. Simple query
 
         Args:
             user_input: The user's input string to route
@@ -68,18 +76,53 @@ class SimpleRouter:
         if not user_input or not user_input.strip():
             raise ValueError("User input cannot be empty")
 
-        # Check for skill invocation
-        skill_match = self.SKILL_PATTERN.match(user_input.strip())
-        if skill_match:
-            return self._route_skill(user_input.strip())
+        user_input = user_input.strip()
 
-        # Default: route to simple_query with LLM
+        # 1. Check for MCP explicit invocation (highest priority)
+        mcp_match = self.MCP_PATTERN.match(user_input)
+        if mcp_match:
+            return self._route_mcp(user_input, mcp_match)
+
+        # 2. Check for skill invocation
+        skill_match = self.SKILL_PATTERN.match(user_input)
+        if skill_match:
+            return self._route_skill(user_input)
+
+        # 3. Default: route to simple_query with LLM
         return ExecutionPlan(
             type="simple_query",
             requires_llm=True,
             requires_rag=False,
             requires_tools=False,
             metadata=None
+        )
+
+    def _route_mcp(self, user_input: str, match: re.Match) -> ExecutionPlan:
+        """Route MCP tool invocation to execution plan.
+
+        Args:
+            user_input: User input starting with @mcp:
+            match: Regex match object from MCP_PATTERN
+
+        Returns:
+            ExecutionPlan with type="mcp" and parsed metadata
+        """
+        server_name = match.group(1)
+        tool_name = match.group(2)
+
+        # Parse arguments
+        arguments = self._parse_parameters(user_input)
+
+        return ExecutionPlan(
+            type="mcp",
+            requires_llm=False,  # Direct tool execution, no LLM needed
+            requires_rag=False,
+            requires_tools=True,
+            metadata={
+                "server": server_name,
+                "tool": tool_name,
+                "arguments": arguments
+            }
         )
 
     def _route_skill(self, user_input: str) -> ExecutionPlan:
