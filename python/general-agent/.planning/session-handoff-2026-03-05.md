@@ -121,10 +121,6 @@ agent-reach doctor
 - `.planning/phase2-progress-2026-03-04.md` - Phase 2 完成总结
 - `.planning/ollama-integration-progress.md` - Ollama 完成总结
 
-### 配置文件
-- `config/mcp_config.yaml` - MCP 配置（计划中会创建）
-- `pyproject.toml` - 项目依赖
-
 ### 代码结构
 ```
 src/
@@ -197,23 +193,6 @@ tests/
 ```bash
 pytest tests/ -v
 ```
-
----
-
-## 🔧 环境信息
-
-**Python:** 3.14.2
-**包管理器：** uv pip
-**Node.js:** 已安装
-**Git:** 活跃分支 main
-
-**已安装关键依赖：**
-- fastapi, uvicorn
-- aiosqlite
-- pyyaml
-- aiohttp (Ollama + Agent Reach)
-- mcp (Agent Reach)
-- camoufox, miku_ai (微信公众号)
 
 ---
 

@@ -30,6 +30,10 @@ import os
 from .skills.loader import SkillLoader
 from .skills.registry import SkillRegistry
 from .skills.executor import SkillExecutor
+from .mcp.connection_manager import MCPConnectionManager
+from .mcp.security import MCPSecurityLayer
+from .mcp.tool_executor import MCPToolExecutor
+from .mcp.config import load_mcp_config
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,7 @@ logger = logging.getLogger(__name__)
 _db: Database | None = None
 _executor: AgentExecutor | None = None
 _skill_registry: SkillRegistry | None = None
+_mcp_manager: MCPConnectionManager | None = None
 
 
 def get_db() -> Database:
@@ -56,8 +61,8 @@ def get_executor() -> AgentExecutor:
 
 
 async def startup() -> None:
-    """Initialize database, skills, and executor on startup"""
-    global _db, _executor, _skill_registry
+    """Initialize database, skills, MCP, and executor on startup"""
+    global _db, _executor, _skill_registry, _mcp_manager
 
     # Initialize database
     db_path = Path("data/general_agent.db")
@@ -109,12 +114,38 @@ async def startup() -> None:
     if _skill_registry:
         skill_executor = SkillExecutor(llm_client)
 
+    # Initialize MCP if enabled
+    mcp_enabled = os.getenv("MCP_ENABLED", "false").lower() == "true"
+    mcp_executor = None
+
+    if mcp_enabled:
+        try:
+            config_path = Path("config/mcp_config.yaml")
+            if config_path.exists():
+                mcp_config = load_mcp_config(str(config_path))
+                _mcp_manager = MCPConnectionManager(str(config_path))
+
+                # Get security config for filesystem server
+                fs_config = mcp_config.servers.get("filesystem")
+                if fs_config:
+                    mcp_security = MCPSecurityLayer(fs_config.security)
+                    mcp_executor = MCPToolExecutor(_mcp_manager, mcp_security, _db)
+                    logger.info("MCP integration initialized")
+                else:
+                    logger.warning("No filesystem server configured in MCP config")
+            else:
+                logger.info(f"MCP config not found at {config_path}, MCP disabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize MCP: {e}")
+            logger.warning("Continuing without MCP support")
+
     _executor = AgentExecutor(
         _db,
         router_instance,
         llm_client,
         skill_registry=_skill_registry,
-        skill_executor=skill_executor
+        skill_executor=skill_executor,
+        mcp_executor=mcp_executor
     )
 
     # Set dependencies for routes
@@ -122,8 +153,16 @@ async def startup() -> None:
 
 
 async def shutdown() -> None:
-    """Close database on shutdown"""
-    global _db
+    """Close database and MCP connections on shutdown"""
+    global _db, _mcp_manager
+
+    if _mcp_manager:
+        try:
+            await _mcp_manager.shutdown_all()
+            logger.info("MCP connections closed")
+        except Exception as e:
+            logger.error(f"Error closing MCP connections: {e}")
+
     if _db:
         await _db.close()
 

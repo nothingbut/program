@@ -2,7 +2,7 @@
 
 通用Agent系统，支持：
 - ✅ **Skill System**（技能系统，已完成）
-- 🚧 **MCP客户端**（Model Context Protocol，计划中）
+- ✅ **MCP Integration**（Model Context Protocol，已完成）
 - 🚧 **RAG**（检索增强生成，计划中）
 
 ## 功能特性
@@ -21,11 +21,27 @@
 - Router集成（@skill 和 /skill 语法）
 - 5个示例技能（personal, productivity）
 
+### Phase 3: MCP Integration ✅
+- MCP SDK集成（mcp>=0.9.0）
+- 配置系统（YAML配置文件）
+- 连接管理器（懒加载单例模式）
+- 三层安全系统（allowed/denied/confirm）
+- 路径白名单（防止目录遍历）
+- 工具执行器（发现和缓存）
+- 审计日志（数据库持久化）
+- Filesystem MCP服务器支持
+
+### Phase 4: Real MCP Server Connections ✅
+- stdio_client集成（启动真实MCP服务器）
+- AsyncExitStack上下文管理
+- 健康检查和自动恢复
+- 优雅关闭处理
+- ClientSession API集成
+
 ### 未来版本
-- 🚧 MCP集成（Phase 3）
-- 🚧 RAG引擎（Phase 4）
-- 📋 TUI终端界面（Phase 5）- 基于Textual的本地命令行交互
-- 📋 高级功能（Phase 6+）
+- RAG引擎（Phase 5）
+- TUI终端界面（Phase 6）- 基于Textual的本地命令行交互
+- 高级功能（Phase 7+）
 
 ## 快速开始
 
@@ -63,7 +79,7 @@ uvicorn src.main:app --reload
 
 访问 http://localhost:8000
 
-### 4. 使用技能（新功能！）
+### 4. 使用技能
 
 ```bash
 # 简单问候
@@ -85,7 +101,36 @@ ls skills/productivity/
 
 详细文档见：[docs/skills.md](docs/skills.md)
 
-### 5. API文档
+### 5. 使用 MCP 工具（新功能！）
+
+**前提条件：**
+1. 配置 `config/mcp_config.yaml`（参考 docs/mcp.md）
+2. 设置环境变量：`export MCP_ENABLED=true`
+3. 安装 Node.js（用于 MCP filesystem server）
+
+**使用示例：**
+
+```bash
+# 读取文件
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "@mcp:filesystem:read_file path=\"/tmp/test.txt\"", "session_id": "test"}'
+
+# 列出目录
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "@mcp:filesystem:list_directory path=\"/tmp\"", "session_id": "test"}'
+```
+
+**安全特性：**
+- 三层权限系统（allowed/denied/confirm）
+- 目录白名单保护
+- 路径遍历防护
+- 审计日志记录
+
+详细文档见：[docs/mcp.md](docs/mcp.md)
+
+### 6. API文档
 
 启动服务后访问：
 - Swagger UI: http://localhost:8000/docs
@@ -120,6 +165,7 @@ general-agent/
 ├── src/
 │   ├── core/          # 核心模块（router, executor, context, llm_client）
 │   ├── skills/        # 技能系统（models, parser, loader, registry, executor）
+│   ├── mcp/           # MCP集成（config, connection_manager, security, tool_executor）
 │   ├── storage/       # 存储层（database, models）
 │   ├── api/           # API路由
 │   └── main.py        # 应用入口
@@ -127,7 +173,9 @@ general-agent/
 │   ├── personal/      # 个人生产力技能
 │   ├── productivity/  # 工作和任务管理技能
 │   └── .ignore        # 忽略模式
-├── tests/             # 测试（130个测试，95%+覆盖率）
+├── config/            # 配置文件
+│   └── mcp_config.yaml # MCP服务器配置
+├── tests/             # 测试（150+个测试，80%+覆盖率）
 ├── templates/         # HTML模板
 ├── static/            # 静态资源
 └── docs/              # 文档
@@ -151,11 +199,16 @@ mypy src/
 ## 文档
 
 - 📖 **[技能系统文档](docs/skills.md)** - 完整的技能系统指南
+<<<<<<< HEAD
 - 🤖 **[Ollama配置指南](docs/OLLAMA_SETUP.md)** - 本地模型配置
 - ✅ **[验收测试指南](docs/ACCEPTANCE_TEST.md)** - Phase 1&2 验收
+=======
+- 🔌 **[MCP集成文档](docs/mcp.md)** - MCP集成用户指南（新！）
+>>>>>>> feature/mcp-integration
 - 📋 **[设计文档](docs/plans/2026-03-02-general-agent-design.md)** - 系统架构设计
 - 🚀 **[Phase 1 计划](docs/plans/2026-03-02-phase1-foundation.md)** - 基础设施实现
 - 🎯 **[Phase 2 计划](docs/plans/2026-03-02-phase2-skill-system.md)** - 技能系统实现
+- 🔧 **[Phase 3 计划](docs/plans/2026-03-04-mcp-integration.md)** - MCP集成实现（新！）
 
 ## 技能系统快速入门
 
