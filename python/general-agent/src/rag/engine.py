@@ -14,6 +14,7 @@ from .chunking import create_chunker, Chunker
 from .loaders import create_loader
 from .retrieval import SemanticRetriever, RetrievalResult
 from .retrieval import utils as retrieval_utils
+from .audit import AuditLogger
 from .exceptions import IndexingError, RetrievalError
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,12 @@ class RAGEngine:
             embedding=self.embedding,
             vector_store=self.vector_store,
             similarity_threshold=config.retrieval.similarity_threshold
+        )
+
+        # 初始化审计日志
+        self.audit_logger = AuditLogger(
+            enabled=config.audit.enabled,
+            log_dir="data/rag/audit"
         )
 
         logger.info(f"RAG Engine initialized with {config.vector_store.type} vector store")
@@ -500,7 +507,7 @@ class RAGEngine:
             )
 
             # 4. 构建返回结果
-            return {
+            result = {
                 "query": query,
                 "results": results,
                 "context": context,
@@ -510,6 +517,16 @@ class RAGEngine:
                     "sources": list(set(r.metadata.get('source', 'Unknown') for r in results))
                 }
             }
+
+            # 5. 记录审计日志
+            if self.config.audit.log_queries:
+                self.audit_logger.log_query(
+                    query=query,
+                    results=[{"id": r.doc_id, "score": r.score} for r in results],
+                    stats=result["stats"]
+                )
+
+            return result
 
         except Exception as e:
             raise RetrievalError(f"Failed to query documents: {e}")
