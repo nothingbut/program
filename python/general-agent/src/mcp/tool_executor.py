@@ -65,8 +65,21 @@ class MCPToolExecutor:
         """
         if server_name not in self._tool_cache:
             logger.info(f"Discovering tools from {server_name}")
-            connection = await self.manager.get_connection(server_name)
-            tools = await connection.list_tools()
+            session = await self.manager.get_connection(server_name)
+
+            # Call MCP SDK's list_tools()
+            tools_result = await session.list_tools()
+
+            # Extract tool definitions
+            tools = [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "inputSchema": tool.inputSchema
+                }
+                for tool in tools_result.tools
+            ]
+
             self._tool_cache[server_name] = tools
             logger.info(f"Discovered {len(tools)} tools from {server_name}")
 
@@ -127,8 +140,21 @@ class MCPToolExecutor:
 
         # 3. Execute tool
         try:
-            connection = await self.manager.get_connection(server_name)
-            result = await connection.call_tool(tool_name, arguments)
+            session = await self.manager.get_connection(server_name)
+
+            # Call MCP SDK's call_tool()
+            mcp_result = await session.call_tool(tool_name, arguments)
+
+            # Convert MCP result to our format
+            result = {
+                "content": [
+                    {
+                        "type": content.type,
+                        "text": getattr(content, "text", None)
+                    }
+                    for content in mcp_result.content
+                ]
+            }
 
             # Log success
             await self._log_operation(

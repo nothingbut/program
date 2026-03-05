@@ -27,13 +27,13 @@ async def test_lazy_connection_creation(temp_mcp_config, mock_mcp_connection, mo
     monkeypatch.setattr(manager, "_start_server", mock_start)
 
     # First call should create connection
-    conn1 = await manager.get_connection("filesystem")
-    assert conn1 is mock_mcp_connection
+    session1 = await manager.get_connection("filesystem")
+    assert session1 is mock_mcp_connection.session
     assert len(manager.connections) == 1
 
     # Second call should reuse connection
-    conn2 = await manager.get_connection("filesystem")
-    assert conn2 is conn1
+    session2 = await manager.get_connection("filesystem")
+    assert session2 is session1
     assert len(manager.connections) == 1
 
 
@@ -66,10 +66,10 @@ async def test_concurrent_connection_requests(temp_mcp_config, mock_mcp_connecti
 
     # Launch 5 concurrent requests
     tasks = [manager.get_connection("filesystem") for _ in range(5)]
-    connections = await asyncio.gather(*tasks)
+    sessions = await asyncio.gather(*tasks)
 
-    # All should get same connection, server started only once
-    assert all(conn is mock_mcp_connection for conn in connections)
+    # All should get same session, server started only once
+    assert all(session is mock_mcp_connection.session for session in sessions)
     assert start_count == 1
 
 

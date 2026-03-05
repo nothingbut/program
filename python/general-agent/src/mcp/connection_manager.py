@@ -1,8 +1,12 @@
 """MCP connection manager - handles server lifecycle."""
 import asyncio
 import logging
-from typing import Dict, Set, Any
-from pathlib import Path
+from typing import Dict, Set, Any, Optional
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from .config import load_mcp_config, MCPConfig, ServerConfig
 from .exceptions import (
@@ -12,6 +16,20 @@ from .exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MCPConnection:
+    """Wrapper for MCP server connection.
+
+    Attributes:
+        session: The active ClientSession
+        exit_stack: AsyncExitStack managing contexts
+        server_name: Name of the server
+    """
+    session: ClientSession
+    exit_stack: AsyncExitStack
+    server_name: str
 
 
 class MCPConnectionManager:
@@ -39,14 +57,14 @@ class MCPConnectionManager:
             config_path: Path to MCP YAML config file
         """
         self.config = load_mcp_config(config_path)
-        self.connections: Dict[str, Any] = {}
+        self.connections: Dict[str, MCPConnection] = {}
         self._locks: Dict[str, asyncio.Lock] = {}
         self._restart_count: Dict[str, int] = {}
         self._disabled_servers: Set[str] = set()
 
         logger.info(f"MCPConnectionManager initialized with {len(self.config.servers)} servers")
 
-    async def get_connection(self, server_name: str) -> Any:
+    async def get_connection(self, server_name: str) -> ClientSession:
         """Get or create server connection (thread-safe).
 
         First call starts the server process, subsequent calls reuse
@@ -56,7 +74,7 @@ class MCPConnectionManager:
             server_name: Name of server (e.g., "filesystem")
 
         Returns:
-            MCP connection object
+            MCP ClientSession object
 
         Raises:
             MCPServerDisabledError: Server is disabled
@@ -77,23 +95,57 @@ class MCPConnectionManager:
                     logger.info(f"Starting MCP server: {server_name}")
                     self.connections[server_name] = await self._start_server(server_name)
 
-        return self.connections[server_name]
+        return self.connections[server_name].session
 
-    async def _start_server(self, server_name: str) -> Any:
+    async def _start_server(self, server_name: str) -> MCPConnection:
         """Start MCP server process.
 
         Args:
             server_name: Server name
 
         Returns:
-            MCP connection
+            MCPConnection wrapper
 
         Raises:
             MCPServerStartupError: Startup failed
         """
-        # TODO: Implement using mcp SDK
-        # For now, this is a placeholder
-        raise NotImplementedError("Server startup not yet implemented")
+        server_config = self.config.servers[server_name]
+
+        try:
+            # Create server parameters
+            server_params = StdioServerParameters(
+                command=server_config.command,
+                args=server_config.args,
+                env=server_config.env or {}
+            )
+
+            # Create exit stack to manage contexts
+            exit_stack = AsyncExitStack()
+
+            # Enter stdio_client context
+            read, write = await exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
+
+            # Enter ClientSession context
+            session = await exit_stack.enter_async_context(
+                ClientSession(read, write)
+            )
+
+            # Initialize the session
+            await session.initialize()
+
+            logger.info(f"Successfully started MCP server: {server_name}")
+
+            return MCPConnection(
+                session=session,
+                exit_stack=exit_stack,
+                server_name=server_name
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to start MCP server '{server_name}': {e}")
+            raise MCPServerStartupError(server_name, str(e)) from e
 
     async def health_check(self, server_name: str) -> bool:
         """Check if server is healthy.
@@ -104,25 +156,65 @@ class MCPConnectionManager:
         Returns:
             True if healthy, False otherwise
         """
-        # TODO: Implement health check
-        return True
+        if server_name not in self.connections:
+            return False
+
+        try:
+            connection = self.connections[server_name]
+            # Try to list tools as a health check ping
+            await connection.session.list_tools()
+            return True
+        except Exception as e:
+            logger.warning(f"Health check failed for '{server_name}': {e}")
+            return False
 
     async def restart_server(self, server_name: str):
         """Restart a crashed server.
 
         Args:
             server_name: Server name
+
+        Raises:
+            MCPServerCrashError: Too many restart attempts
         """
-        # TODO: Implement restart logic
-        pass
+        # Track restart attempts
+        self._restart_count.setdefault(server_name, 0)
+        self._restart_count[server_name] += 1
+
+        if self._restart_count[server_name] > 3:
+            self._mark_server_disabled(server_name)
+            raise MCPServerCrashError(
+                server_name,
+                f"Server has crashed {self._restart_count[server_name]} times"
+            )
+
+        logger.info(f"Restarting MCP server: {server_name} (attempt {self._restart_count[server_name]})")
+
+        # Close existing connection
+        if server_name in self.connections:
+            try:
+                await self.connections[server_name].exit_stack.aclose()
+            except Exception as e:
+                logger.warning(f"Error closing connection during restart: {e}")
+            del self.connections[server_name]
+
+        # Start new connection
+        try:
+            self.connections[server_name] = await self._start_server(server_name)
+            # Reset restart count on successful restart
+            self._restart_count[server_name] = 0
+        except Exception as e:
+            logger.error(f"Failed to restart server '{server_name}': {e}")
+            raise
 
     async def shutdown_all(self):
         """Shutdown all server connections."""
         logger.info("Shutting down all MCP servers")
 
-        for server_name, connection in self.connections.items():
+        for server_name, connection in list(self.connections.items()):
             try:
-                # TODO: Implement connection cleanup
+                # Close the exit stack which will cleanup all contexts
+                await connection.exit_stack.aclose()
                 logger.info(f"Closed connection to {server_name}")
             except Exception as e:
                 logger.error(f"Error closing {server_name}: {e}")

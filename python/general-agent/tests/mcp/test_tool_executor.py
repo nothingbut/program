@@ -33,10 +33,10 @@ async def test_executor_initialization(mock_mcp_connection, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_tool_discovery(mock_mcp_connection, monkeypatch):
+async def test_tool_discovery(mock_mcp_session, monkeypatch):
     """Test tool discovery from server."""
     manager = AsyncMock()
-    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+    manager.get_connection = AsyncMock(return_value=mock_mcp_session)
 
     security = AsyncMock()
     db = AsyncMock()
@@ -52,13 +52,13 @@ async def test_tool_discovery(mock_mcp_connection, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_call_tool_with_allowed_operation(mock_mcp_connection):
+async def test_call_tool_with_allowed_operation(mock_mcp_session):
     """Test calling tool with allowed operation."""
     from src.mcp.tool_executor import MCPToolExecutor
     from src.mcp.security import MCPSecurityLayer, SecurityConfig
 
     manager = AsyncMock()
-    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+    manager.get_connection = AsyncMock(return_value=mock_mcp_session)
 
     config = SecurityConfig(
         allowed_directories=["/tmp"],
@@ -77,8 +77,10 @@ async def test_call_tool_with_allowed_operation(mock_mcp_connection):
         "session_1"
     )
 
-    assert result["content"] == "test result"
-    mock_mcp_connection.call_tool.assert_called_once()
+    # Result is now a list of content blocks
+    assert len(result["content"]) == 1
+    assert result["content"][0]["text"] == "test result"
+    mock_mcp_session.call_tool.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -167,12 +169,12 @@ async def test_call_tool_path_outside_whitelist():
 
 
 @pytest.mark.asyncio
-async def test_tool_discovery_caching(mock_mcp_connection):
+async def test_tool_discovery_caching(mock_mcp_session):
     """Test tool discovery results are cached."""
     from src.mcp.tool_executor import MCPToolExecutor
 
     manager = AsyncMock()
-    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+    manager.get_connection = AsyncMock(return_value=mock_mcp_session)
 
     security = AsyncMock()
     db = AsyncMock()
@@ -189,16 +191,16 @@ async def test_tool_discovery_caching(mock_mcp_connection):
     assert tools1 is tools2
     # Connection should only be called once
     manager.get_connection.assert_called_once()
-    mock_mcp_connection.list_tools.assert_called_once()
+    mock_mcp_session.list_tools.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_tool_discovery_different_servers(mock_mcp_connection):
+async def test_tool_discovery_different_servers(mock_mcp_session):
     """Test different servers have separate caches."""
     from src.mcp.tool_executor import MCPToolExecutor
 
     manager = AsyncMock()
-    manager.get_connection = AsyncMock(return_value=mock_mcp_connection)
+    manager.get_connection = AsyncMock(return_value=mock_mcp_session)
 
     security = AsyncMock()
     db = AsyncMock()

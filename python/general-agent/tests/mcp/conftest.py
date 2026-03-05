@@ -39,31 +39,55 @@ def temp_mcp_config(tmp_path):
 
 
 @pytest.fixture
-def mock_mcp_connection():
-    """Mock MCP connection for unit tests."""
-    conn = AsyncMock()
-    conn.call_tool = AsyncMock(return_value={"content": "test result"})
-    conn.list_tools = AsyncMock(return_value=[
-        {
-            "name": "read_file",
-            "description": "Read file contents",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"}
-                }
-            }
-        },
-        {
-            "name": "write_file",
-            "description": "Write file contents",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "content": {"type": "string"}
-                }
-            }
+def mock_mcp_session():
+    """Mock MCP ClientSession for unit tests."""
+    from unittest.mock import Mock
+    session = AsyncMock()
+
+    # Mock list_tools to return proper MCP response format
+    tools_result = Mock()
+    tool1 = Mock()
+    tool1.name = "read_file"
+    tool1.description = "Read file contents"
+    tool1.inputSchema = {
+        "type": "object",
+        "properties": {"path": {"type": "string"}}
+    }
+
+    tool2 = Mock()
+    tool2.name = "write_file"
+    tool2.description = "Write file contents"
+    tool2.inputSchema = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "content": {"type": "string"}
         }
-    ])
-    return conn
+    }
+
+    tools_result.tools = [tool1, tool2]
+    session.list_tools = AsyncMock(return_value=tools_result)
+
+    # Mock call_tool to return proper MCP response format
+    call_result = Mock()
+    content_block = Mock()
+    content_block.type = "text"
+    content_block.text = "test result"
+    call_result.content = [content_block]
+    session.call_tool = AsyncMock(return_value=call_result)
+
+    return session
+
+
+@pytest.fixture
+def mock_mcp_connection(mock_mcp_session):
+    """Mock MCPConnection wrapper for unit tests."""
+    from contextlib import AsyncExitStack
+    from src.mcp.connection_manager import MCPConnection
+
+    mock_exit_stack = AsyncMock(spec=AsyncExitStack)
+    return MCPConnection(
+        session=mock_mcp_session,
+        exit_stack=mock_exit_stack,
+        server_name="filesystem"
+    )

@@ -36,7 +36,9 @@ async def test_full_stack_allowed_operation(temp_mcp_config, mock_mcp_connection
         "session_1"
     )
 
-    assert result["content"] == "test result"
+    # Result is now a list of content blocks
+    assert len(result["content"]) == 1
+    assert result["content"][0]["text"] == "test result"
 
 
 @pytest.mark.asyncio
