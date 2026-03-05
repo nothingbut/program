@@ -166,11 +166,23 @@ class MCPToolExecutor:
             server_name: Server name
             tool_name: Tool name
             arguments: Tool arguments
-            status: Operation status (started/success/failed)
+            status: Operation status (started/success/failed/denied)
             result: Tool result (if successful)
             error: Error message (if failed)
         """
-        # TODO: Implement database logging in Phase 3.3
-        logger.debug(
-            f"Audit log: {session_id} - {server_name}:{tool_name} - {status}"
-        )
+        try:
+            await self.db.log_mcp_operation(
+                session_id=session_id,
+                server=server_name,
+                tool=tool_name,
+                arguments=arguments,
+                status=status,
+                result=result,
+                error=error,
+                timestamp=datetime.now()
+            )
+            logger.debug(
+                f"Audit log: {session_id} - {server_name}:{tool_name} - {status}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to log MCP operation: {e}")
