@@ -95,7 +95,8 @@ async def startup() -> None:
         ollama_config = OllamaConfig(
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             model=os.getenv("OLLAMA_MODEL", "llama3.2:latest"),
-            temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))
+            temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.7")),
+            timeout=float(os.getenv("OLLAMA_TIMEOUT", "120.0"))  # 支持环境变量配置超时
         )
         llm_client = OllamaClient(config=ollama_config)
         logger.info(f"Using Ollama client with model: {ollama_config.model}")

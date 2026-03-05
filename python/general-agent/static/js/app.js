@@ -125,7 +125,24 @@ function appendMessage(role, content) {
     const messagesDiv = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    messageDiv.textContent = content;
+
+    // 创建消息内容容器
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    contentDiv.textContent = content;
+
+    // 创建时间戳
+    const timestamp = document.createElement('div');
+    timestamp.className = 'message-timestamp';
+    const now = new Date();
+    timestamp.textContent = now.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+
+    messageDiv.appendChild(contentDiv);
+    messageDiv.appendChild(timestamp);
     messagesDiv.appendChild(messageDiv);
 
     // 滚动到底部
