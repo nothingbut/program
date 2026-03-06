@@ -100,7 +100,7 @@ async def run_quick_query(
             await _ensure_session_exists(db, session_id)
 
         # Execute query
-        result = await executor.execute(query, session_id)
+        result = await executor.execute(user_input=query, session_id=session_id)
 
         # Extract response
         response = result.get("response", "")
