@@ -221,3 +221,17 @@ async def test_message_auto_scroll():
         # This is a basic check - the exact scroll position depends on widget size
         messages = message_list.query(".message").nodes
         assert len(messages) == 20
+
+
+@pytest.mark.asyncio
+async def test_session_list_creation():
+    """Test SessionList creation with MockDB"""
+    from src.cli.widgets.session_list import SessionList
+
+    # Mock database
+    class MockDB:
+        async def get_all_sessions(self):
+            return []
+
+    session_list = SessionList(MockDB())
+    assert session_list is not None

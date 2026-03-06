@@ -146,6 +146,38 @@ class Database:
             logger.error(f"Failed to get session {session_id}: {e}")
             return None
 
+    async def get_all_sessions(self, limit: int = 50) -> List[Session]:
+        """获取所有会话，按更新时间倒序排列
+
+        Args:
+            limit: 返回的最大会话数
+
+        Returns:
+            会话列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?",
+                (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                sessions = []
+                for row in rows:
+                    sessions.append(Session(
+                        id=row['id'],
+                        title=row['title'],
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        updated_at=datetime.fromisoformat(row['updated_at']),
+                        metadata=self._parse_metadata(row['metadata'], f"session {row['id']}")
+                    ))
+                return sessions
+        except Exception as e:
+            logger.error(f"Failed to get all sessions: {e}")
+            return []
+
     async def add_message(self, message: Message) -> None:
         """添加消息"""
         if not self.conn:
