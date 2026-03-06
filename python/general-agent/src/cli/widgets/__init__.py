@@ -1,4 +1,5 @@
-"""Custom widgets for the TUI application."""
-from src.cli.widgets.message_list import MessageList
+"""TUI widgets"""
+from .message_list import MessageList
+from .session_list import SessionList
 
-__all__ = ["MessageList"]
+__all__ = ["MessageList", "SessionList"]
