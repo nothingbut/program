@@ -1,9 +1,7 @@
 """CLI entry point for General Agent"""
-import sys
 import asyncio
 from typing import Optional
 import typer
-from pathlib import Path
 
 # Create Typer app
 cli = typer.Typer(
