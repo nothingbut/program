@@ -185,6 +185,19 @@ class AgentTUI(App):
         if self.db:
             await self.db.create_session(self.current_session)
 
+    def _load_messages_to_list(self, messages: list, message_list: MessageList) -> None:
+        """Load messages into the message list widget.
+
+        Args:
+            messages: List of Message objects to load
+            message_list: MessageList widget to add messages to
+        """
+        for msg in messages:
+            if msg.role == "user":
+                message_list.add_message("user", msg.content)
+            elif msg.role == "assistant":
+                message_list.add_message("agent", msg.content)
+
     async def load_session(self, session_id: Optional[str]) -> None:
         """Load an existing session or create a new one
 
@@ -206,11 +219,7 @@ class AgentTUI(App):
                 messages = await self.db.get_messages(session_id)
                 message_list = self.query_one("#messages", MessageList)
 
-                for msg in messages:
-                    if msg.role == "user":
-                        message_list.add_message("user", msg.content)
-                    elif msg.role == "assistant":
-                        message_list.add_message("agent", msg.content)
+                self._load_messages_to_list(messages, message_list)
 
                 logger.info(f"Loaded session {session_id} with {len(messages)} messages")
                 return
