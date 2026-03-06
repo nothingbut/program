@@ -11,6 +11,7 @@ from .models import (
 )
 from .orchestrator import ToolOrchestrator, ToolRegistry, ToolType
 from .planner import WorkflowPlanner, PlanningError
+from .executor import WorkflowExecutor, ExecutionError
 
 __all__ = [
     # Models
@@ -28,8 +29,8 @@ __all__ = [
     "ToolType",
     # Planner
     "WorkflowPlanner",
-    "PlanningError"
-]
-from .executor import WorkflowExecutor, ExecutionError
+    "PlanningError",
+    # Executor
     "WorkflowExecutor",
     "ExecutionError"
+]
