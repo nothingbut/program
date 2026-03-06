@@ -14,6 +14,53 @@ logger = logging.getLogger(__name__)
 DB_PATH = Path("data/general_agent.db")
 
 
+async def _create_temporary_session(db, query: str) -> str:
+    """
+    Create a temporary session and return its ID.
+
+    Args:
+        db: Database instance
+        query: User query string (used for session title)
+
+    Returns:
+        Session ID of the created temporary session
+    """
+    temp_session_id = f"cli-{uuid.uuid4()}"
+    now = datetime.now()
+    temp_session = Session(
+        id=temp_session_id,
+        title=query[:50],
+        created_at=now,
+        updated_at=now,
+        metadata={"type": "quick_query", "temporary": True}
+    )
+    await db.create_session(temp_session)
+    logger.debug(f"Created temporary session: {temp_session_id}")
+    return temp_session_id
+
+
+async def _ensure_session_exists(db, session_id: str) -> None:
+    """
+    Ensure session exists, create if not.
+
+    Args:
+        db: Database instance
+        session_id: Session ID to check/create
+    """
+    existing_session = await db.get_session(session_id)
+    if existing_session is None:
+        now = datetime.now()
+        new_session = Session(
+            id=session_id,
+            title="Quick Query Session",
+            created_at=now,
+            updated_at=now,
+            metadata={"type": "quick_query"}
+        )
+        await db.create_session(new_session)
+        logger.debug(f"Created new session: {session_id}")
+
+
 async def run_quick_query(
     query: str,
     session_id: Optional[str] = None,
@@ -48,37 +95,9 @@ async def run_quick_query(
 
         # Create or use session
         if session_id is None:
-            # Create temporary session with unique ID
-            temp_session_id = f"cli-{uuid.uuid4()}"
-            now = datetime.now()
-            temp_session = Session(
-                id=temp_session_id,
-                title=query[:50],
-                created_at=now,
-                updated_at=now,
-                metadata={"type": "quick_query", "temporary": True}
-            )
-            await db.create_session(temp_session)
-            session_id = temp_session_id
-
-            if verbose:
-                logger.debug(f"Created temporary session: {session_id}")
+            session_id = await _create_temporary_session(db, query)
         else:
-            # Check if session exists, create if not
-            existing_session = await db.get_session(session_id)
-            if existing_session is None:
-                now = datetime.now()
-                new_session = Session(
-                    id=session_id,
-                    title="Quick Query Session",
-                    created_at=now,
-                    updated_at=now,
-                    metadata={"type": "quick_query"}
-                )
-                await db.create_session(new_session)
-
-                if verbose:
-                    logger.debug(f"Created new session: {session_id}")
+            await _ensure_session_exists(db, session_id)
 
         # Execute query
         result = await executor.execute(query, session_id)
