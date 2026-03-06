@@ -270,11 +270,21 @@ def run_tui(session_id: Optional[str] = None, verbose: bool = False) -> None:
         session_id: Optional session ID to resume
         verbose: Enable verbose logging
     """
+    import asyncio
+    from .startup import startup_checks
+
     # Set logging level
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    # Startup checks
+    try:
+        asyncio.run(startup_checks(verbose))
+    except RuntimeError as e:
+        print(str(e))
+        return
 
     # Create and run app
     app = AgentTUI(session_id=session_id, verbose=verbose)
