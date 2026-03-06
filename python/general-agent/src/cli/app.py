@@ -8,6 +8,7 @@ from typing import Optional
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.events import Key
 from textual.widgets import Header, Footer, Input
 
 from .widgets.message_list import MessageList
@@ -87,6 +88,13 @@ class AgentTUI(App):
         except Exception as e:
             logger.error(f"Failed to initialize app: {e}")
             self.notify(f"初始化失败: {str(e)}", severity="error")
+
+    def on_key(self, event: Key) -> None:
+        """Handle key events - intercept Ctrl+K before Input widget"""
+        if event.key == "ctrl+k":
+            self.action_clear_screen()
+            event.prevent_default()
+            event.stop()
 
     @on(Input.Submitted)
     async def on_input_submitted(self, event: Input.Submitted) -> None:
