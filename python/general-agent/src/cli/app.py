@@ -114,8 +114,8 @@ class AgentTUI(App):
             if not self.executor or not self.current_session:
                 raise RuntimeError("Application not properly initialized")
 
-            response = await self.executor.execute(
-                query=user_input,
+            result = await self.executor.execute(
+                user_input=user_input,
                 session_id=self.current_session.id
             )
 
@@ -123,7 +123,7 @@ class AgentTUI(App):
             message_list.remove_thinking_indicator()
 
             # Add agent response
-            message_list.add_message("agent", response)
+            message_list.add_message("agent", result["response"])
 
         except ConnectionError as e:
             message_list.remove_thinking_indicator()
