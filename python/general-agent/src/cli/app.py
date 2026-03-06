@@ -3,7 +3,6 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from textual import on
@@ -14,7 +13,7 @@ from textual.widgets import Header, Footer, Input
 from .widgets.message_list import MessageList
 from .core_init import initialize_database, initialize_executor
 from ..storage.database import Database
-from ..storage.models import Session, Message
+from ..storage.models import Session
 from ..core.executor import AgentExecutor
 
 logger = logging.getLogger(__name__)
@@ -270,7 +269,6 @@ def run_tui(session_id: Optional[str] = None, verbose: bool = False) -> None:
         session_id: Optional session ID to resume
         verbose: Enable verbose logging
     """
-    import asyncio
     from .startup import startup_checks
 
     # Set logging level
