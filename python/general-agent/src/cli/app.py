@@ -167,15 +167,15 @@ class AgentTUI(App):
         """显示会话列表（Ctrl+L）"""
         from .widgets import SessionList
 
-        def handle_selection(session_id: Optional[str]) -> None:
+        async def handle_selection(session_id: Optional[str]) -> None:
             """处理会话选择"""
             if session_id == "__new__":
                 # 创建新会话
-                asyncio.create_task(self.create_new_session())
+                await self.create_new_session()
                 self.query_one("#messages", MessageList).clear_messages()
             elif session_id:
                 # 加载选中的会话
-                asyncio.create_task(self.load_session(session_id))
+                await self.load_session(session_id)
                 self.query_one("#messages", MessageList).clear_messages()
 
         # 显示会话列表
