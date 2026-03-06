@@ -1,6 +1,7 @@
 """Startup checks for CLI"""
 import os
 import logging
+import asyncio
 from pathlib import Path
 import aiohttp
 
@@ -20,7 +21,7 @@ async def check_ollama_connection() -> bool:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 return resp.status == 200
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
         logger.debug(f"Ollama connection check failed: {e}")
         return False
 
@@ -34,8 +35,15 @@ async def startup_checks(verbose: bool = False) -> None:
 
     Raises:
         RuntimeError: 如果关键检查失败
+
+    Note:
+        This function assumes the CLI is run from the project root directory.
+        Paths are relative to the current working directory:
+        - data/ (database storage)
+        - .env (environment configuration)
     """
     # 1. 检查数据目录
+    # NOTE: Assumes CLI is run from project root where 'data/' should exist
     data_dir = Path("data")
     if not data_dir.exists():
         if verbose:
@@ -43,6 +51,7 @@ async def startup_checks(verbose: bool = False) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
 
     # 2. 检查 .env 文件
+    # NOTE: Assumes CLI is run from project root where '.env' should exist
     env_file = Path(".env")
     if not env_file.exists():
         if verbose:
