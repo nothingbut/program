@@ -25,7 +25,7 @@ class AgentTUI(App):
     CSS_PATH = "app.css"
 
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("ctrl+q", "quit", "退出", show=True),
         Binding("ctrl+n", "new_session", "New Session"),
         Binding("ctrl+k", "clear_screen", "Clear"),
     ]
@@ -54,7 +54,7 @@ class AgentTUI(App):
         yield Header()
         yield MessageList(id="messages")
         yield Input(
-            placeholder="输入您的问题...",
+            placeholder="输入消息... (Enter 发送)",
             id="input"
         )
         yield Footer()
@@ -62,6 +62,9 @@ class AgentTUI(App):
     async def on_mount(self) -> None:
         """Initialize components when app is mounted"""
         try:
+            # Show initialization notification
+            self.notify("正在初始化...")
+
             # Initialize database
             self.db = await initialize_database()
 
@@ -77,14 +80,8 @@ class AgentTUI(App):
             # Focus the input widget
             self.query_one("#input", Input).focus()
 
-            # Show welcome notification
-            if self.current_session:
-                self.notify(
-                    f"会话已加载: {self.current_session.id[:8]}...",
-                    severity="information"
-                )
-            else:
-                self.notify("欢迎使用 General Agent TUI!", severity="information")
+            # Show completion notification
+            self.notify("初始化完成！", severity="information")
 
         except Exception as e:
             logger.error(f"Failed to initialize app: {e}")
@@ -137,20 +134,17 @@ class AgentTUI(App):
             message_list.add_error(f"处理失败: {str(e)}")
             logger.error(f"Error processing query: {e}")
 
-    def action_new_session(self) -> None:
+    async def action_new_session(self) -> None:
         """Create a new session"""
         try:
-            self.create_new_session()
+            await self.create_new_session()
 
             # Clear messages
             message_list = self.query_one("#messages", MessageList)
             message_list.clear_messages()
 
             # Notify user
-            self.notify(
-                f"新会话已创建: {self.current_session.id[:8]}...",
-                severity="information"
-            )
+            self.notify("已创建新会话", severity="information")
 
         except Exception as e:
             logger.error(f"Failed to create new session: {e}")
@@ -167,18 +161,18 @@ class AgentTUI(App):
             logger.error(f"Failed to clear screen: {e}")
             self.notify(f"清空失败: {str(e)}", severity="error")
 
-    def create_new_session(self) -> None:
+    async def create_new_session(self) -> None:
         """Create a new session object
 
         This is a synchronous helper that creates a Session object.
         Database persistence happens in load_session.
         """
-        session_id = str(uuid.uuid4())
+        session_id = f"session-{uuid.uuid4()}"
         now = datetime.now()
 
         self.current_session = Session(
             id=session_id,
-            title=f"Session {now.strftime('%Y-%m-%d %H:%M')}",
+            title="新对话",
             created_at=now,
             updated_at=now,
             metadata=None
@@ -186,6 +180,10 @@ class AgentTUI(App):
 
         # Update subtitle
         self.sub_title = f"会话: {session_id[:8]}..."
+
+        # Persist to database
+        if self.db:
+            await self.db.create_session(self.current_session)
 
     async def load_session(self, session_id: Optional[str]) -> None:
         """Load an existing session or create a new one
@@ -219,12 +217,10 @@ class AgentTUI(App):
 
             else:
                 logger.warning(f"Session {session_id} not found, creating new session")
+                self.notify(f"会话 {session_id} 不存在，创建新会话", severity="warning")
 
         # Create new session if not found or no session_id provided
-        self.create_new_session()
-
-        # Persist to database
-        await self.db.create_session(self.current_session)
+        await self.create_new_session()
 
         logger.info(f"Created new session {self.current_session.id}")
 
