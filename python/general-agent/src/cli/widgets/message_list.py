@@ -11,27 +11,34 @@ class MessageList(VerticalScroll):
     MessageList {
         height: 1fr;
         width: 1fr;
+        border: solid $primary;
     }
 
     .message {
         padding: 1 2;
-        margin: 0 0 1 0;
+        margin: 0 1;
     }
 
     .user-message {
         background: $boost;
+        color: $text;
     }
 
     .agent-message {
         background: $panel;
+        color: $text;
     }
 
     .error-message {
         background: $error;
+        color: $text;
     }
 
     #thinking {
         background: $warning;
+        color: $text;
+        padding: 1;
+        margin: 0 1;
     }
     """
 
@@ -51,13 +58,16 @@ class MessageList(VerticalScroll):
         icon = "🧑" if role == "user" else "🤖"
 
         # Create formatted message text
-        message_text = Text.from_markup(f"{icon} {content}")
+        text = Text()
+        text.append(f"{icon} ", style="bold")
+        text.append(f"{role.title()}: ", style="bold")
+        text.append(content)
 
         # Determine CSS class based on role
         css_class = f"{role}-message message"
 
         # Create and mount the message label
-        message_label = Label(message_text, classes=css_class)
+        message_label = Label(text, classes=css_class)
         self.mount(message_label)
 
         # Auto-scroll to bottom
@@ -70,10 +80,13 @@ class MessageList(VerticalScroll):
             error_msg: The error message to display
         """
         # Create formatted error text
-        error_text = Text.from_markup(f"❌ {error_msg}")
+        text = Text()
+        text.append("❌ ", style="bold red")
+        text.append("错误: ", style="bold red")
+        text.append(error_msg, style="red")
 
         # Create and mount the error label
-        error_label = Label(error_text, classes="error-message message")
+        error_label = Label(text, classes="error-message message")
         self.mount(error_label)
 
         # Auto-scroll to bottom
@@ -81,10 +94,13 @@ class MessageList(VerticalScroll):
 
     def add_thinking_indicator(self) -> None:
         """Add a 'thinking' indicator to show the agent is processing"""
-        thinking_text = Text.from_markup("🤔 正在思考...")
+        text = Text()
+        text.append("🤖 ", style="bold")
+        text.append("Agent: ", style="bold")
+        text.append("正在思考... ", style="italic")
 
         # Create and mount the thinking indicator with specific ID
-        thinking_label = Label(thinking_text, id="thinking", classes="message")
+        thinking_label = Label(text, id="thinking", classes="message")
         self.mount(thinking_label)
 
         # Auto-scroll to bottom
@@ -104,6 +120,10 @@ class MessageList(VerticalScroll):
 
     def clear_messages(self) -> None:
         """Clear all messages from the list"""
-        # Remove all children widgets
-        for child in list(self.children):
-            child.remove()
+        # Remove only .message elements and #thinking
+        for message in self.query(".message"):
+            message.remove()
+        try:
+            self.query_one("#thinking").remove()
+        except Exception:
+            pass
