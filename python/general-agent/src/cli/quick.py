@@ -53,7 +53,7 @@ async def run_quick_query(
             now = datetime.now()
             temp_session = Session(
                 id=temp_session_id,
-                title="Quick Query",
+                title=query[:50],
                 created_at=now,
                 updated_at=now,
                 metadata={"type": "quick_query", "temporary": True}
