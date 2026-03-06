@@ -1,2 +1,123 @@
 """Quick query mode implementation."""
-# TODO: Implement quick query mode
+import uuid
+import logging
+from pathlib import Path
+from typing import Optional
+from datetime import datetime
+
+from .core_init import initialize_database, initialize_executor
+from ..storage.models import Session
+
+logger = logging.getLogger(__name__)
+
+# Default database path
+DB_PATH = Path("data/general_agent.db")
+
+
+async def run_quick_query(
+    query: str,
+    session_id: Optional[str] = None,
+    verbose: bool = False
+) -> str:
+    """
+    Execute a quick query and return the response.
+
+    Args:
+        query: User query string
+        session_id: Optional session ID. If not provided, creates a temporary session
+        verbose: Enable verbose logging
+
+    Returns:
+        Agent response as a string
+
+    Raises:
+        None - All errors are caught and returned as user-friendly error messages
+    """
+    # Validate input
+    if not query or not query.strip():
+        return "Error: Query cannot be empty"
+
+    db = None
+
+    try:
+        # Initialize database
+        db = await initialize_database(DB_PATH)
+
+        # Initialize executor
+        executor = await initialize_executor(db, verbose=verbose)
+
+        # Create or use session
+        if session_id is None:
+            # Create temporary session with unique ID
+            temp_session_id = f"cli-{uuid.uuid4()}"
+            now = datetime.now()
+            temp_session = Session(
+                id=temp_session_id,
+                title="Quick Query",
+                created_at=now,
+                updated_at=now,
+                metadata={"type": "quick_query", "temporary": True}
+            )
+            await db.create_session(temp_session)
+            session_id = temp_session_id
+
+            if verbose:
+                logger.debug(f"Created temporary session: {session_id}")
+        else:
+            # Check if session exists, create if not
+            existing_session = await db.get_session(session_id)
+            if existing_session is None:
+                now = datetime.now()
+                new_session = Session(
+                    id=session_id,
+                    title="Quick Query Session",
+                    created_at=now,
+                    updated_at=now,
+                    metadata={"type": "quick_query"}
+                )
+                await db.create_session(new_session)
+
+                if verbose:
+                    logger.debug(f"Created new session: {session_id}")
+
+        # Execute query
+        result = await executor.execute(query, session_id)
+
+        # Extract response
+        response = result.get("response", "")
+
+        if not result.get("success", True):
+            error = result.get("error", "Unknown error")
+            logger.warning(f"Query execution failed: {error}")
+
+        return response
+
+    except ConnectionError as e:
+        error_msg = f"Connection error: Unable to connect to the service. Please ensure Ollama is running. Details: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+    except TimeoutError as e:
+        error_msg = f"Timeout error: The request took too long to complete. The model may be slow or overloaded. Details: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+    except ValueError as e:
+        error_msg = f"Input error: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.exception("Error during quick query execution")
+        return error_msg
+
+    finally:
+        # Always clean up database connection
+        if db is not None:
+            try:
+                await db.close()
+                if verbose:
+                    logger.debug("Database connection closed")
+            except Exception as e:
+                logger.warning(f"Failed to close database connection: {e}")
