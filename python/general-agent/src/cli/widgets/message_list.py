@@ -42,9 +42,9 @@ class MessageList(VerticalScroll):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
         """Initialize the MessageList widget"""
-        super().__init__()
+        super().__init__(**kwargs)
         self.can_focus = False
 
     def add_message(self, role: str, content: str) -> None:
