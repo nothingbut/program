@@ -38,9 +38,20 @@
 - 优雅关闭处理
 - ClientSession API集成
 
+### Phase 5: RAG Engine ✅
+- 文档管理系统（Markdown/PDF/Text）
+- 混合检索引擎（关键词+语义）
+- 查询重写与路由
+- 引用生成和验证
+- Web界面集成
+
+### Phase 6: TUI 终端界面 ✅
+- 命令行快速查询模式
+- 交互式 TUI 界面（基于 Textual）
+- 会话管理（创建、切换、列表）
+- 与 Web 完全共享会话数据
+
 ### 未来版本
-- RAG引擎（Phase 5）
-- TUI终端界面（Phase 6）- 基于Textual的本地命令行交互
 - 高级功能（Phase 7+）
 
 ## 快速开始
@@ -79,7 +90,33 @@ uvicorn src.main:app --reload
 
 访问 http://localhost:8000
 
-### 4. 使用技能
+### 5. 使用 TUI（终端界面）
+
+**安装 CLI 依赖：**
+```bash
+pip install -e ".[cli]"
+```
+
+**快速查询模式：**
+```bash
+agent "你的问题"
+```
+
+**交互式 TUI 模式：**
+```bash
+agent --tui
+```
+
+**快捷键：**
+- `Enter` - 发送消息
+- `Ctrl+N` - 新建会话
+- `Ctrl+L` - 会话列表
+- `Ctrl+K` - 清屏
+- `Ctrl+Q` - 退出
+
+详细使用指南：[docs/tui.md](docs/tui.md)
+
+### 6. 使用技能
 
 ```bash
 # 简单问候
@@ -101,7 +138,7 @@ ls skills/productivity/
 
 详细文档见：[docs/skills.md](docs/skills.md)
 
-### 5. 使用 MCP 工具（新功能！）
+### 7. 使用 MCP 工具
 
 **前提条件：**
 1. 配置 `config/mcp_config.yaml`（参考 docs/mcp.md）
@@ -130,7 +167,7 @@ curl -X POST http://localhost:8000/api/chat \
 
 详细文档见：[docs/mcp.md](docs/mcp.md)
 
-### 6. API文档
+### 8. API文档
 
 启动服务后访问：
 - Swagger UI: http://localhost:8000/docs
@@ -199,16 +236,14 @@ mypy src/
 ## 文档
 
 - 📖 **[技能系统文档](docs/skills.md)** - 完整的技能系统指南
-<<<<<<< HEAD
+- 🖥️ **[TUI 使用指南](docs/tui.md)** - 终端界面用户指南
+- 🔌 **[MCP集成文档](docs/mcp.md)** - MCP集成用户指南
 - 🤖 **[Ollama配置指南](docs/OLLAMA_SETUP.md)** - 本地模型配置
 - ✅ **[验收测试指南](docs/ACCEPTANCE_TEST.md)** - Phase 1&2 验收
-=======
-- 🔌 **[MCP集成文档](docs/mcp.md)** - MCP集成用户指南（新！）
->>>>>>> feature/mcp-integration
 - 📋 **[设计文档](docs/plans/2026-03-02-general-agent-design.md)** - 系统架构设计
 - 🚀 **[Phase 1 计划](docs/plans/2026-03-02-phase1-foundation.md)** - 基础设施实现
 - 🎯 **[Phase 2 计划](docs/plans/2026-03-02-phase2-skill-system.md)** - 技能系统实现
-- 🔧 **[Phase 3 计划](docs/plans/2026-03-04-mcp-integration.md)** - MCP集成实现（新！）
+- 🔧 **[Phase 3 计划](docs/plans/2026-03-04-mcp-integration.md)** - MCP集成实现
 
 ## 技能系统快速入门
 
