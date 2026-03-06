@@ -334,7 +334,7 @@ asession my-work-session
 1. **查看日志：** `agent --tui --verbose`
 2. **检查配置：** 确保 `.env` 正确
 3. **重启服务：** 有时重启 Ollama 和 TUI 可以解决问题
-4. **提交 Issue：** [GitHub Issues](https://github.com/yourusername/general-agent/issues)
+4. **查看文档：** 参考本指南的故障排除部分
 
 ---
 

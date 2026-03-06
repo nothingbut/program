@@ -3,7 +3,7 @@
 通用Agent系统，支持：
 - ✅ **Skill System**（技能系统，已完成）
 - ✅ **MCP Integration**（Model Context Protocol，已完成）
-- 🚧 **RAG**（检索增强生成，计划中）
+- ✅ **RAG**（检索增强生成，已完成）
 
 ## 功能特性
 
@@ -237,12 +237,12 @@ mypy src/
 
 - 📖 **[技能系统文档](docs/skills.md)** - 完整的技能系统指南
 - 🖥️ **[TUI 使用指南](docs/tui.md)** - 终端界面用户指南
+- 📚 **[RAG 使用指南](docs/RAG_GUIDE.md)** - 检索增强生成用户指南
 - 🔌 **[MCP集成文档](docs/mcp.md)** - MCP集成用户指南
 - 🤖 **[Ollama配置指南](docs/OLLAMA_SETUP.md)** - 本地模型配置
 - ✅ **[验收测试指南](docs/ACCEPTANCE_TEST.md)** - Phase 1&2 验收
 - 📋 **[设计文档](docs/plans/2026-03-02-general-agent-design.md)** - 系统架构设计
 - 🚀 **[Phase 1 计划](docs/plans/2026-03-02-phase1-foundation.md)** - 基础设施实现
-- 🎯 **[Phase 2 计划](docs/plans/2026-03-02-phase2-skill-system.md)** - 技能系统实现
 - 🔧 **[Phase 3 计划](docs/plans/2026-03-04-mcp-integration.md)** - MCP集成实现
 
 ## 技能系统快速入门
