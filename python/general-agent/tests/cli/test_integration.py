@@ -21,31 +21,34 @@ async def test_cli_web_session_sharing(tmp_path):
 
     # CLI 侧：创建会话和消息
     db = await initialize_database(db_path)
-    executor = await initialize_executor(db, verbose=False)
+    try:
+        executor = await initialize_executor(db, verbose=False)
 
-    session_id = "test-shared-session"
-    session = Session(
-        id=session_id,
-        title="测试共享会话",
-        created_at=datetime.now(),
-        updated_at=datetime.now()
-    )
-    await db.create_session(session)
+        session_id = "test-shared-session"
+        session = Session(
+            id=session_id,
+            title="测试共享会话",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        await db.create_session(session)
 
-    # 发送消息
-    result = await executor.execute("测试消息", session_id)
-    assert result["response"] is not None
+        # 发送消息
+        result = await executor.execute("测试消息", session_id)
+        assert result["response"] is not None
 
-    # Web 侧：读取同一会话
-    messages = await db.get_messages(session_id)
-    assert len(messages) >= 2  # 至少有用户消息和 Agent 响应
+        # Web 侧：读取同一会话
+        messages = await db.get_messages(session_id)
+        assert len(messages) >= 2  # 至少有用户消息和 Agent 响应
 
-    # Verify message content
-    assert messages[0].role == "user"
-    assert messages[0].content == "测试消息"
-    assert messages[1].role == "assistant"
-
-    await db.close()
+        # Verify message content
+        assert messages[0].role == "user"
+        assert messages[0].content == "测试消息"
+        assert messages[1].role == "assistant"
+        assert messages[1].content  # Verify non-empty
+        assert len(messages[1].content) > 0
+    finally:
+        await db.close()
 
 
 @pytest.mark.asyncio
@@ -68,9 +71,10 @@ async def test_quick_query_creates_session(tmp_path, monkeypatch):
 
     # 验证会话已创建
     db = await initialize_database(db_path)
-    sessions = await db.get_all_sessions()
+    try:
+        sessions = await db.get_all_sessions()
 
-    assert len(sessions) >= 1
-    assert sessions[0].title.startswith("测试")
-
-    await db.close()
+        assert len(sessions) >= 1
+        assert sessions[0].title.startswith("测试")
+    finally:
+        await db.close()
