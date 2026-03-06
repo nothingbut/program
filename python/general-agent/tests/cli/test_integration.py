@@ -1,7 +1,5 @@
 """Integration tests for CLI"""
 import pytest
-import asyncio
-import os
 from pathlib import Path
 from datetime import datetime
 
@@ -42,6 +40,11 @@ async def test_cli_web_session_sharing(tmp_path):
     messages = await db.get_messages(session_id)
     assert len(messages) >= 2  # 至少有用户消息和 Agent 响应
 
+    # Verify message content
+    assert messages[0].role == "user"
+    assert messages[0].content == "测试消息"
+    assert messages[1].role == "assistant"
+
     await db.close()
 
 
@@ -53,26 +56,21 @@ async def test_quick_query_creates_session(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
 
     # 修改 quick.py 中的 DB_PATH
-    import src.cli.quick as quick_module
-    original_db_path = quick_module.DB_PATH
-    quick_module.DB_PATH = db_path
+    monkeypatch.setattr('src.cli.quick.DB_PATH', db_path)
 
-    try:
-        # 执行快速查询
-        result = await run_quick_query("测试", None, False)
+    # 执行快速查询
+    result = await run_quick_query("测试", None, False)
 
-        # 验证返回了响应
-        assert result is not None
-        assert isinstance(result, str)
+    # 验证返回了响应
+    assert result is not None
+    assert isinstance(result, str)
+    assert len(result) > 0  # Verify non-empty response
 
-        # 验证会话已创建
-        db = await initialize_database(db_path)
-        sessions = await db.get_all_sessions()
+    # 验证会话已创建
+    db = await initialize_database(db_path)
+    sessions = await db.get_all_sessions()
 
-        assert len(sessions) >= 1
-        assert sessions[0].title.startswith("测试")
+    assert len(sessions) >= 1
+    assert sessions[0].title.startswith("测试")
 
-        await db.close()
-    finally:
-        # 恢复原始 DB_PATH
-        quick_module.DB_PATH = original_db_path
+    await db.close()
