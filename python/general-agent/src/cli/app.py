@@ -1,4 +1,5 @@
 """TUI application implementation using Textual."""
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -28,6 +29,7 @@ class AgentTUI(App):
         Binding("ctrl+q", "quit", "退出", show=True),
         Binding("ctrl+n", "new_session", "New Session"),
         Binding("ctrl+k", "clear_screen", "Clear"),
+        Binding("ctrl+l", "list_sessions", "会话列表", show=True),
     ]
 
     def __init__(
@@ -160,6 +162,24 @@ class AgentTUI(App):
         except Exception as e:
             logger.error(f"Failed to clear screen: {e}")
             self.notify(f"清空失败: {str(e)}", severity="error")
+
+    async def action_list_sessions(self) -> None:
+        """显示会话列表（Ctrl+L）"""
+        from .widgets import SessionList
+
+        def handle_selection(session_id: Optional[str]) -> None:
+            """处理会话选择"""
+            if session_id == "__new__":
+                # 创建新会话
+                asyncio.create_task(self.create_new_session())
+                self.query_one("#messages", MessageList).clear_messages()
+            elif session_id:
+                # 加载选中的会话
+                asyncio.create_task(self.load_session(session_id))
+                self.query_one("#messages", MessageList).clear_messages()
+
+        # 显示会话列表
+        await self.push_screen(SessionList(self.db), handle_selection)
 
     async def create_new_session(self) -> None:
         """Create a new session object

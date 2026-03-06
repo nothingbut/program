@@ -1,4 +1,5 @@
 """测试数据库操作"""
+import asyncio
 import pytest
 from datetime import datetime
 from pathlib import Path
@@ -99,6 +100,43 @@ async def test_get_recent_messages(test_db_path: Path):
     # 获取最近3条
     recent = await db.get_recent_messages("sess-1", limit=3)
     assert len(recent) == 3
+
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_get_all_sessions(test_db_path: Path):
+    """测试获取所有会话"""
+    db = Database(test_db_path)
+    await db.initialize()
+
+    # 创建多个会话
+    now = datetime.now()
+    session1 = Session(
+        id="session-1",
+        title="First Session",
+        created_at=now,
+        updated_at=now
+    )
+    await db.create_session(session1)
+
+    # 等待一小段时间确保时间差异
+    await asyncio.sleep(0.1)
+
+    session2 = Session(
+        id="session-2",
+        title="Second Session",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    await db.create_session(session2)
+
+    # 获取所有会话
+    sessions = await db.get_all_sessions()
+
+    assert len(sessions) == 2
+    assert sessions[0].id == "session-2"  # 最新的在前
+    assert sessions[1].id == "session-1"
 
     await db.close()
 
