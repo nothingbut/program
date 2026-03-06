@@ -24,6 +24,9 @@ class Database:
         self.conn = await aiosqlite.connect(str(self.db_path))
         self.conn.row_factory = aiosqlite.Row
 
+        # Enable foreign key constraints
+        await self.conn.execute("PRAGMA foreign_keys = ON")
+
         # 创建会话表
         await self.conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -74,6 +77,9 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_mcp_logs_timestamp
             ON mcp_audit_logs(timestamp)
         """)
+
+        # Execute workflow tables migration
+        await self._execute_migration_007()
 
         await self.conn.commit()
 
@@ -374,4 +380,590 @@ class Database:
             return logs
         except Exception as e:
             logger.error(f"Failed to get MCP audit logs for session {session_id}: {e}")
+            return []
+
+    async def _execute_migration_007(self) -> None:
+        """Execute migration 007: workflow tables"""
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        migration_file = Path(__file__).parent / "migrations" / "007_workflow_tables.sql"
+        if migration_file.exists():
+            with open(migration_file, 'r', encoding='utf-8') as f:
+                migration_sql = f.read()
+                await self.conn.executescript(migration_sql)
+        else:
+            # Fallback: create tables inline if migration file doesn't exist
+            logger.warning(f"Migration file not found: {migration_file}, creating tables inline")
+            await self._create_workflow_tables_inline()
+
+    async def _create_workflow_tables_inline(self) -> None:
+        """Create workflow tables inline (fallback)"""
+        # workflows table
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS workflows (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                plan JSON NOT NULL,
+                status TEXT NOT NULL,
+                current_task_id TEXT,
+                created_at TIMESTAMP NOT NULL,
+                completed_at TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+        """)
+
+        # task_executions table
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS task_executions (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                task_name TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                params JSON NOT NULL,
+                status TEXT NOT NULL,
+                result JSON,
+                error TEXT,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                retry_count INTEGER DEFAULT 0,
+                FOREIGN KEY (workflow_id) REFERENCES workflows(id)
+            )
+        """)
+
+        # workflow_approvals table
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS workflow_approvals (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                user_comment TEXT,
+                created_at TIMESTAMP NOT NULL,
+                responded_at TIMESTAMP,
+                FOREIGN KEY (workflow_id) REFERENCES workflows(id)
+            )
+        """)
+
+        # Indexes
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_workflows_session ON workflows(session_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_workflows_created ON workflows(created_at)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_task_executions_workflow ON task_executions(workflow_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_task_executions_status ON task_executions(status)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_task_executions_started ON task_executions(started_at)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_approvals_workflow ON workflow_approvals(workflow_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON workflow_approvals(status)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_approvals_created ON workflow_approvals(created_at)")
+
+    # ==================== Workflow Methods ====================
+
+    async def create_workflow(
+        self,
+        workflow_id: str,
+        session_id: str,
+        goal: str,
+        plan: Dict[str, Any],
+        status: str,
+        created_at: datetime,
+        current_task_id: Optional[str] = None
+    ) -> None:
+        """创建工作流
+
+        Args:
+            workflow_id: 工作流ID
+            session_id: 会话ID
+            goal: 工作流目标
+            plan: 任务计划（JSON）
+            status: 状态（pending/running/completed/failed/cancelled）
+            created_at: 创建时间
+            current_task_id: 当前任务ID（可选）
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            await self.conn.execute(
+                """
+                INSERT INTO workflows (id, session_id, goal, plan, status, current_task_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    workflow_id,
+                    session_id,
+                    goal,
+                    json.dumps(plan),
+                    status,
+                    current_task_id,
+                    created_at.isoformat()
+                )
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to create workflow {workflow_id}: {e}")
+            raise
+
+    async def get_workflow(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        """获取工作流
+
+        Args:
+            workflow_id: 工作流ID
+
+        Returns:
+            工作流字典或None
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM workflows WHERE id = ?",
+                (workflow_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                return {
+                    "id": row["id"],
+                    "session_id": row["session_id"],
+                    "goal": row["goal"],
+                    "plan": json.loads(row["plan"]),
+                    "status": row["status"],
+                    "current_task_id": row["current_task_id"],
+                    "created_at": row["created_at"],
+                    "completed_at": row["completed_at"]
+                }
+        except Exception as e:
+            logger.error(f"Failed to get workflow {workflow_id}: {e}")
+            return None
+
+    async def update_workflow_status(
+        self,
+        workflow_id: str,
+        status: str,
+        current_task_id: Optional[str] = None,
+        completed_at: Optional[datetime] = None
+    ) -> None:
+        """更新工作流状态
+
+        Args:
+            workflow_id: 工作流ID
+            status: 新状态
+            current_task_id: 当前任务ID（可选）
+            completed_at: 完成时间（可选）
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            if completed_at:
+                await self.conn.execute(
+                    """
+                    UPDATE workflows
+                    SET status = ?, current_task_id = ?, completed_at = ?
+                    WHERE id = ?
+                    """,
+                    (status, current_task_id, completed_at.isoformat(), workflow_id)
+                )
+            else:
+                await self.conn.execute(
+                    """
+                    UPDATE workflows
+                    SET status = ?, current_task_id = ?
+                    WHERE id = ?
+                    """,
+                    (status, current_task_id, workflow_id)
+                )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to update workflow {workflow_id}: {e}")
+            raise
+
+    async def get_session_workflows(self, session_id: str) -> List[Dict[str, Any]]:
+        """获取会话的所有工作流
+
+        Args:
+            session_id: 会话ID
+
+        Returns:
+            工作流列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM workflows WHERE session_id = ? ORDER BY created_at DESC",
+                (session_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                workflows = []
+                for row in rows:
+                    workflows.append({
+                        "id": row["id"],
+                        "session_id": row["session_id"],
+                        "goal": row["goal"],
+                        "plan": json.loads(row["plan"]),
+                        "status": row["status"],
+                        "current_task_id": row["current_task_id"],
+                        "created_at": row["created_at"],
+                        "completed_at": row["completed_at"]
+                    })
+                return workflows
+        except Exception as e:
+            logger.error(f"Failed to get workflows for session {session_id}: {e}")
+            return []
+
+    # ==================== Task Execution Methods ====================
+
+    async def create_task_execution(
+        self,
+        execution_id: str,
+        workflow_id: str,
+        task_id: str,
+        task_name: str,
+        tool_name: str,
+        params: Dict[str, Any],
+        status: str,
+        started_at: datetime,
+        result: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        retry_count: int = 0
+    ) -> None:
+        """创建任务执行记录
+
+        Args:
+            execution_id: 执行记录ID
+            workflow_id: 工作流ID
+            task_id: 任务ID
+            task_name: 任务名称
+            tool_name: 工具名称
+            params: 任务参数
+            status: 状态（pending/running/completed/failed/skipped）
+            started_at: 开始时间
+            result: 执行结果（可选）
+            error: 错误信息（可选）
+            retry_count: 重试次数
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            await self.conn.execute(
+                """
+                INSERT INTO task_executions
+                (id, workflow_id, task_id, task_name, tool_name, params, status, result, error, started_at, retry_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    execution_id,
+                    workflow_id,
+                    task_id,
+                    task_name,
+                    tool_name,
+                    json.dumps(params),
+                    status,
+                    json.dumps(result) if result else None,
+                    error,
+                    started_at.isoformat(),
+                    retry_count
+                )
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to create task execution {execution_id}: {e}")
+            raise
+
+    async def get_task_execution(self, execution_id: str) -> Optional[Dict[str, Any]]:
+        """获取任务执行记录
+
+        Args:
+            execution_id: 执行记录ID
+
+        Returns:
+            执行记录字典或None
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM task_executions WHERE id = ?",
+                (execution_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                return {
+                    "id": row["id"],
+                    "workflow_id": row["workflow_id"],
+                    "task_id": row["task_id"],
+                    "task_name": row["task_name"],
+                    "tool_name": row["tool_name"],
+                    "params": json.loads(row["params"]),
+                    "status": row["status"],
+                    "result": json.loads(row["result"]) if row["result"] else None,
+                    "error": row["error"],
+                    "started_at": row["started_at"],
+                    "completed_at": row["completed_at"],
+                    "retry_count": row["retry_count"]
+                }
+        except Exception as e:
+            logger.error(f"Failed to get task execution {execution_id}: {e}")
+            return None
+
+    async def update_task_execution(
+        self,
+        execution_id: str,
+        status: str,
+        result: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        completed_at: Optional[datetime] = None,
+        retry_count: Optional[int] = None
+    ) -> None:
+        """更新任务执行状态
+
+        Args:
+            execution_id: 执行记录ID
+            status: 新状态
+            result: 执行结果（可选）
+            error: 错误信息（可选）
+            completed_at: 完成时间（可选）
+            retry_count: 重试次数（可选）
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            # Build update query dynamically
+            updates = ["status = ?"]
+            params = [status]
+
+            if result is not None:
+                updates.append("result = ?")
+                params.append(json.dumps(result))
+
+            if error is not None:
+                updates.append("error = ?")
+                params.append(error)
+
+            if completed_at is not None:
+                updates.append("completed_at = ?")
+                params.append(completed_at.isoformat())
+
+            if retry_count is not None:
+                updates.append("retry_count = ?")
+                params.append(retry_count)
+
+            params.append(execution_id)
+
+            await self.conn.execute(
+                f"UPDATE task_executions SET {', '.join(updates)} WHERE id = ?",
+                params
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to update task execution {execution_id}: {e}")
+            raise
+
+    async def get_workflow_executions(self, workflow_id: str) -> List[Dict[str, Any]]:
+        """获取工作流的所有任务执行记录
+
+        Args:
+            workflow_id: 工作流ID
+
+        Returns:
+            执行记录列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM task_executions WHERE workflow_id = ? ORDER BY started_at",
+                (workflow_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                executions = []
+                for row in rows:
+                    executions.append({
+                        "id": row["id"],
+                        "workflow_id": row["workflow_id"],
+                        "task_id": row["task_id"],
+                        "task_name": row["task_name"],
+                        "tool_name": row["tool_name"],
+                        "params": json.loads(row["params"]),
+                        "status": row["status"],
+                        "result": json.loads(row["result"]) if row["result"] else None,
+                        "error": row["error"],
+                        "started_at": row["started_at"],
+                        "completed_at": row["completed_at"],
+                        "retry_count": row["retry_count"]
+                    })
+                return executions
+        except Exception as e:
+            logger.error(f"Failed to get executions for workflow {workflow_id}: {e}")
+            return []
+
+    # ==================== Workflow Approval Methods ====================
+
+    async def create_approval(
+        self,
+        approval_id: str,
+        workflow_id: str,
+        task_id: str,
+        status: str,
+        created_at: datetime,
+        user_comment: Optional[str] = None
+    ) -> None:
+        """创建审批记录
+
+        Args:
+            approval_id: 审批记录ID
+            workflow_id: 工作流ID
+            task_id: 任务ID
+            status: 状态（pending/approved/rejected）
+            created_at: 创建时间
+            user_comment: 用户评论（可选）
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            await self.conn.execute(
+                """
+                INSERT INTO workflow_approvals (id, workflow_id, task_id, status, user_comment, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    approval_id,
+                    workflow_id,
+                    task_id,
+                    status,
+                    user_comment,
+                    created_at.isoformat()
+                )
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to create approval {approval_id}: {e}")
+            raise
+
+    async def get_approval(self, approval_id: str) -> Optional[Dict[str, Any]]:
+        """获取审批记录
+
+        Args:
+            approval_id: 审批记录ID
+
+        Returns:
+            审批记录字典或None
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM workflow_approvals WHERE id = ?",
+                (approval_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                return {
+                    "id": row["id"],
+                    "workflow_id": row["workflow_id"],
+                    "task_id": row["task_id"],
+                    "status": row["status"],
+                    "user_comment": row["user_comment"],
+                    "created_at": row["created_at"],
+                    "responded_at": row["responded_at"]
+                }
+        except Exception as e:
+            logger.error(f"Failed to get approval {approval_id}: {e}")
+            return None
+
+    async def update_approval(
+        self,
+        approval_id: str,
+        status: str,
+        user_comment: Optional[str] = None,
+        responded_at: Optional[datetime] = None
+    ) -> None:
+        """更新审批状态
+
+        Args:
+            approval_id: 审批记录ID
+            status: 新状态
+            user_comment: 用户评论（可选）
+            responded_at: 响应时间（可选）
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            updates = ["status = ?"]
+            params = [status]
+
+            if user_comment is not None:
+                updates.append("user_comment = ?")
+                params.append(user_comment)
+
+            if responded_at is not None:
+                updates.append("responded_at = ?")
+                params.append(responded_at.isoformat())
+
+            params.append(approval_id)
+
+            await self.conn.execute(
+                f"UPDATE workflow_approvals SET {', '.join(updates)} WHERE id = ?",
+                params
+            )
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            logger.error(f"Failed to update approval {approval_id}: {e}")
+            raise
+
+    async def get_pending_approvals(self, workflow_id: str) -> List[Dict[str, Any]]:
+        """获取工作流的待审批记录
+
+        Args:
+            workflow_id: 工作流ID
+
+        Returns:
+            待审批记录列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM workflow_approvals WHERE workflow_id = ? AND status = 'pending' ORDER BY created_at",
+                (workflow_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                approvals = []
+                for row in rows:
+                    approvals.append({
+                        "id": row["id"],
+                        "workflow_id": row["workflow_id"],
+                        "task_id": row["task_id"],
+                        "status": row["status"],
+                        "user_comment": row["user_comment"],
+                        "created_at": row["created_at"],
+                        "responded_at": row["responded_at"]
+                    })
+                return approvals
+        except Exception as e:
+            logger.error(f"Failed to get pending approvals for workflow {workflow_id}: {e}")
             return []
