@@ -30,3 +30,6 @@ __all__ = [
     "WorkflowPlanner",
     "PlanningError"
 ]
+from .executor import WorkflowExecutor, ExecutionError
+    "WorkflowExecutor",
+    "ExecutionError"
