@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import uuid
+import random
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Set
 from collections import deque
@@ -32,7 +33,9 @@ class WorkflowExecutor:
         orchestrator: ToolOrchestrator,
         database,
         max_parallel: int = 5,
-        enable_retry: bool = True
+        enable_retry: bool = True,
+        base_backoff: float = 1.0,
+        max_backoff: float = 60.0
     ):
         """初始化执行器
 
@@ -41,11 +44,49 @@ class WorkflowExecutor:
             database: 数据库实例（用于持久化状态）
             max_parallel: 最大并行任务数
             enable_retry: 是否启用任务重试
+            base_backoff: 基础退避时间（秒）
+            max_backoff: 最大退避时间（秒）
         """
         self.orchestrator = orchestrator
         self.database = database
         self.max_parallel = max_parallel
         self.enable_retry = enable_retry
+        self.base_backoff = base_backoff
+        self.max_backoff = max_backoff
+        self._paused = False
+        self._stop_requested = False
+
+    def pause(self) -> None:
+        """暂停工作流执行"""
+        logger.info("Pausing workflow execution")
+        self._paused = True
+
+    def resume(self) -> None:
+        """恢复工作流执行"""
+        logger.info("Resuming workflow execution")
+        self._paused = False
+
+    def stop(self) -> None:
+        """停止工作流执行"""
+        logger.info("Stopping workflow execution")
+        self._stop_requested = True
+
+    def _calculate_backoff(self, retry_count: int) -> float:
+        """计算退避时间（指数退避 + 抖动）
+
+        Args:
+            retry_count: 当前重试次数
+
+        Returns:
+            退避时间（秒）
+        """
+        # 指数退避: base_backoff * 2^(retry_count - 1)
+        backoff = self.base_backoff * (2 ** (retry_count - 1))
+        # 限制最大值
+        backoff = min(backoff, self.max_backoff)
+        # 添加随机抖动 (±25%)
+        jitter = backoff * 0.25 * (2 * random.random() - 1)
+        return max(0.1, backoff + jitter)
 
     async def execute(
         self,
@@ -88,6 +129,17 @@ class WorkflowExecutor:
             failed_tasks: List[str] = []
 
             for task_batch in execution_order:
+                # 检查是否请求停止
+                if self._stop_requested:
+                    logger.info("Stop requested, cancelling workflow")
+                    workflow.status = WorkflowStatus.CANCELLED
+                    break
+
+                # 处理暂停
+                while self._paused and not self._stop_requested:
+                    logger.debug("Workflow paused, waiting...")
+                    await asyncio.sleep(0.5)
+
                 # 并行执行当前批次的任务
                 batch_results = await self._execute_batch(
                     tasks=task_batch,
@@ -110,6 +162,13 @@ class WorkflowExecutor:
                     break
 
             # 更新最终状态
+            # 计算所有已完成的任务（包括之前已完成的）
+            all_completed_tasks = {
+                t.id for t in workflow.tasks
+                if t.status == TaskStatus.SUCCESS
+            }
+            all_completed_tasks.update(completed_tasks)
+
             # 计算取消的任务
             cancelled_tasks = [
                 t.id for t in workflow.tasks
@@ -118,7 +177,7 @@ class WorkflowExecutor:
 
             if failed_tasks:
                 workflow.status = WorkflowStatus.FAILED
-            elif len(completed_tasks) == len(workflow.tasks):
+            elif len(all_completed_tasks) == len(workflow.tasks):
                 workflow.status = WorkflowStatus.COMPLETED
             elif cancelled_tasks and not failed_tasks:
                 # 只有取消没有失败
@@ -160,23 +219,30 @@ class WorkflowExecutor:
         Returns:
             任务批次列表，每个批次中的任务可以并行执行
         """
-        # 构建依赖图
+        # 构建依赖图（只包含未完成的任务）
         in_degree: Dict[str, int] = {}
         graph: Dict[str, List[str]] = {}
+        pending_tasks = [t for t in workflow.tasks if t.status != TaskStatus.SUCCESS]
 
         # 初始化
-        for task in workflow.tasks:
-            in_degree[task.id] = len(task.dependencies)
+        for task in pending_tasks:
+            # 计算未完成的依赖数量
+            pending_deps = [
+                dep_id for dep_id in task.dependencies
+                if any(t.id == dep_id and t.status != TaskStatus.SUCCESS for t in workflow.tasks)
+            ]
+            in_degree[task.id] = len(pending_deps)
             graph[task.id] = []
 
         # 构建反向图（从依赖者指向被依赖者）
-        for task in workflow.tasks:
+        for task in pending_tasks:
             for dep_id in task.dependencies:
-                graph[dep_id].append(task.id)
+                if dep_id in graph:  # 只考虑未完成的依赖
+                    graph[dep_id].append(task.id)
 
         # 使用 BFS 进行分层
         result: List[List[Task]] = []
-        task_map = {task.id: task for task in workflow.tasks}
+        task_map = {task.id: task for task in pending_tasks}
 
         while any(degree == 0 for degree in in_degree.values()):
             # 找出所有入度为 0 的任务（可以并行执行）
@@ -330,9 +396,13 @@ class WorkflowExecutor:
                         await self._save_task_state(task, workflow, status="failed", error=error_msg)
                         return False
                     else:
-                        # 重试
-                        logger.warning(f"Task {task.id} failed, retrying ({retry_count}/{max_retries}): {e}")
-                        await asyncio.sleep(1)  # 简单的退避策略
+                        # 重试 - 使用指数退避 + 抖动
+                        backoff_time = self._calculate_backoff(retry_count)
+                        logger.warning(
+                            f"Task {task.id} failed, retrying ({retry_count}/{max_retries}) "
+                            f"after {backoff_time:.2f}s: {e}"
+                        )
+                        await asyncio.sleep(backoff_time)
 
         except Exception as e:
             logger.error(f"Task {task.id} execution error: {e}")
@@ -441,3 +511,100 @@ class WorkflowExecutor:
             "completed_at": workflow_data["completed_at"],
             "task_executions": executions
         }
+
+    async def resume_workflow(
+        self,
+        workflow_id: str,
+        on_task_complete: Optional[callable] = None,
+        on_approval_required: Optional[callable] = None
+    ) -> Dict[str, Any]:
+        """从断点恢复工作流执行
+
+        Args:
+            workflow_id: 要恢复的工作流ID
+            on_task_complete: 任务完成回调（可选）
+            on_approval_required: 需要审批回调（可选）
+
+        Returns:
+            执行结果摘要
+
+        Raises:
+            ValueError: 工作流不存在或已完成
+            ExecutionError: 执行失败
+        """
+        logger.info(f"Resuming workflow: {workflow_id}")
+
+        # 从数据库加载工作流状态
+        workflow_data = await self.database.get_workflow(workflow_id)
+        if not workflow_data:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+
+        # 检查状态
+        if workflow_data["status"] in [WorkflowStatus.COMPLETED.value, WorkflowStatus.CANCELLED.value]:
+            raise ValueError(f"Cannot resume {workflow_data['status']} workflow")
+
+        # 重建 Workflow 对象
+        from .models import Workflow
+        workflow = Workflow(
+            id=workflow_data["id"],
+            session_id=workflow_data["session_id"],
+            goal=workflow_data["goal"],
+            tasks=[]  # 从 plan 中恢复
+        )
+        workflow.status = WorkflowStatus(workflow_data["status"])
+        workflow.created_at = workflow_data["created_at"]
+        workflow.started_at = workflow_data["started_at"]
+        workflow.current_task_id = workflow_data.get("current_task_id")
+
+        # 从 plan 恢复任务列表
+        plan = workflow_data.get("plan", {})
+        if "tasks" in plan:
+            for task_data in plan["tasks"]:
+                from .models import Task, TaskStatus
+                task = Task(
+                    id=task_data["id"],
+                    name=task_data["name"],
+                    tool=task_data["tool"],
+                    params=task_data.get("params", {}),
+                    dependencies=task_data.get("dependencies", []),
+                    requires_approval=task_data.get("requires_approval", False),
+                    max_retries=task_data.get("max_retries", 3)
+                )
+                workflow.tasks.append(task)
+
+        # 加载已完成的任务执行记录
+        executions = await self.database.get_workflow_executions(workflow_id)
+        completed_task_ids = {
+            exec["task_id"]
+            for exec in executions
+            if exec["status"] == TaskStatus.SUCCESS.value
+        }
+
+        # 标记已完成的任务
+        for task in workflow.tasks:
+            if task.id in completed_task_ids:
+                task.status = TaskStatus.SUCCESS
+                logger.info(f"Task {task.id} already completed, skipping")
+
+        # 恢复执行上下文
+        context = ExecutionContext(
+            workflow_id=workflow.id,
+            session_id=workflow.session_id
+        )
+
+        # 从成功的任务恢复结果到上下文
+        for exec in executions:
+            if exec["status"] == TaskStatus.SUCCESS.value and exec.get("result"):
+                context.set_result(exec["task_id"], exec["result"])
+
+        # 重置状态标志
+        self._paused = False
+        self._stop_requested = False
+
+        # 继续执行（只执行未完成的任务）
+        logger.info(f"Resuming from checkpoint, {len(completed_task_ids)} tasks already completed")
+        return await self.execute(
+            workflow=workflow,
+            on_task_complete=on_task_complete,
+            on_approval_required=on_approval_required
+        )
