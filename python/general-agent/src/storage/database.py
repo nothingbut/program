@@ -967,3 +967,70 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to get pending approvals for workflow {workflow_id}: {e}")
             return []
+
+    async def get_workflow_approvals(self, workflow_id: str) -> List[Dict[str, Any]]:
+        """获取工作流的所有审批记录
+
+        Args:
+            workflow_id: 工作流ID
+
+        Returns:
+            审批记录列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM workflow_approvals WHERE workflow_id = ? ORDER BY created_at DESC",
+                (workflow_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                approvals = []
+                for row in rows:
+                    approvals.append({
+                        "id": row["id"],
+                        "workflow_id": row["workflow_id"],
+                        "task_id": row["task_id"],
+                        "status": row["status"],
+                        "user_comment": row["user_comment"],
+                        "created_at": row["created_at"],
+                        "responded_at": row["responded_at"]
+                    })
+                return approvals
+        except Exception as e:
+            logger.error(f"Failed to get approvals for workflow {workflow_id}: {e}")
+            return []
+
+    async def get_all_approvals(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """获取所有审批记录
+
+        Args:
+            limit: 返回数量限制
+
+        Returns:
+            审批记录列表
+        """
+        if not self.conn:
+            raise RuntimeError("Database not initialized")
+
+        try:
+            async with self.conn.execute(
+                f"SELECT * FROM workflow_approvals ORDER BY created_at DESC LIMIT {limit}"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                approvals = []
+                for row in rows:
+                    approvals.append({
+                        "id": row["id"],
+                        "workflow_id": row["workflow_id"],
+                        "task_id": row["task_id"],
+                        "status": row["status"],
+                        "user_comment": row["user_comment"],
+                        "created_at": row["created_at"],
+                        "responded_at": row["responded_at"]
+                    })
+                return approvals
+        except Exception as e:
+            logger.error(f"Failed to get all approvals: {e}")
+            return []
