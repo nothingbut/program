@@ -12,6 +12,12 @@ from .models import (
 from .orchestrator import ToolOrchestrator, ToolRegistry, ToolType
 from .planner import WorkflowPlanner, PlanningError
 from .executor import WorkflowExecutor, ExecutionError
+from .approval import ApprovalManager, ApprovalStatus
+from .approval_ui import (
+    ApprovalUI,
+    create_approval_handler,
+    default_approval_handler
+)
 
 __all__ = [
     # Models
@@ -32,5 +38,12 @@ __all__ = [
     "PlanningError",
     # Executor
     "WorkflowExecutor",
-    "ExecutionError"
+    "ExecutionError",
+    # Approval
+    "ApprovalManager",
+    "ApprovalStatus",
+    # Approval UI
+    "ApprovalUI",
+    "create_approval_handler",
+    "default_approval_handler"
 ]
