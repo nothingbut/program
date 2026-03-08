@@ -2,6 +2,7 @@
 from .collector import WorkflowMetrics, TaskMetrics, MetricsCollector
 from .tracer import Span, TaskTrace, TraceRecorder
 from .storage import InMemoryBuffer, MetricsStorage
+from .monitor import PerformanceMonitor
 
 __all__ = [
     "WorkflowMetrics",
@@ -12,4 +13,5 @@ __all__ = [
     "TraceRecorder",
     "InMemoryBuffer",
     "MetricsStorage",
+    "PerformanceMonitor",
 ]
