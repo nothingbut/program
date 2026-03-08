@@ -130,6 +130,7 @@ class TestMetricsCollector:
         collector.complete_workflow("wf-1")
 
         metrics = collector.get_workflow_metrics("wf-1")
+        assert metrics is not None
         assert metrics.completed_at is not None
         assert metrics.completed_tasks == 10
         assert metrics.total_duration > 0
