@@ -1,17 +1,17 @@
 """测试指标收集器"""
-import pytest
+
 from datetime import datetime
 from src.workflow.performance.collector import (
     WorkflowMetrics,
     TaskMetrics,
-    MetricsCollector
+    MetricsCollector,
 )
 
 
 class TestWorkflowMetrics:
     """测试工作流指标"""
 
-    def test_create_workflow_metrics(self):
+    def test_create_workflow_metrics(self) -> None:
         """测试创建工作流指标"""
         metrics = WorkflowMetrics(
             workflow_id="wf-1",
@@ -31,7 +31,7 @@ class TestWorkflowMetrics:
             avg_cpu_percent=0.0,
             db_query_count=0,
             db_total_time=0.0,
-            db_avg_query_time=0.0
+            db_avg_query_time=0.0,
         )
         assert metrics.workflow_id == "wf-1"
         assert metrics.total_tasks == 10
@@ -41,7 +41,7 @@ class TestWorkflowMetrics:
 class TestTaskMetrics:
     """测试任务指标"""
 
-    def test_create_task_metrics(self):
+    def test_create_task_metrics(self) -> None:
         """测试创建任务指标"""
         metrics = TaskMetrics(
             task_id="task-1",
@@ -54,7 +54,7 @@ class TestTaskMetrics:
             status="completed",
             retry_count=0,
             memory_used=104857600,
-            cpu_time=0.5
+            cpu_time=0.5,
         )
         assert metrics.task_id == "task-1"
         assert metrics.task_name == "Test Task"
@@ -67,7 +67,7 @@ class TestTaskMetrics:
 class TestMetricsCollector:
     """测试指标收集器"""
 
-    def test_start_workflow(self):
+    def test_start_workflow(self) -> None:
         """测试开始工作流"""
         collector = MetricsCollector()
         collector.start_workflow("wf-1", total_tasks=10)
@@ -80,7 +80,7 @@ class TestMetricsCollector:
         assert metrics.started_at is not None
         assert metrics.completed_at is None
 
-    def test_record_task(self):
+    def test_record_task(self) -> None:
         """测试记录任务"""
         collector = MetricsCollector()
         collector.start_workflow("wf-1", total_tasks=5)
@@ -96,7 +96,7 @@ class TestMetricsCollector:
             status="completed",
             retry_count=0,
             memory_used=104857600,
-            cpu_time=0.5
+            cpu_time=0.5,
         )
         collector.record_task(task_metric)
 
@@ -104,7 +104,7 @@ class TestMetricsCollector:
         assert len(task_metrics) == 1
         assert task_metrics[0].task_id == "task-1"
 
-    def test_complete_workflow(self):
+    def test_complete_workflow(self) -> None:
         """测试完成工作流（验证统计计算）"""
         collector = MetricsCollector()
         collector.start_workflow("wf-1", total_tasks=10)
@@ -123,7 +123,7 @@ class TestMetricsCollector:
                 status="completed",
                 retry_count=0,
                 memory_used=(100 + i * 10) * 1024 * 1024,  # 转换为字节
-                cpu_time=0.5
+                cpu_time=0.5,
             )
             collector.record_task(task_metric)
 
@@ -148,7 +148,7 @@ class TestMetricsCollector:
         # 验证内存峰值（最后一个任务：190 MB）
         assert metrics.peak_memory_mb == 190.0
 
-    def test_to_dict_methods(self):
+    def test_to_dict_methods(self) -> None:
         """测试所有类的 to_dict() 方法"""
         # 测试 WorkflowMetrics.to_dict()
         workflow_metrics = WorkflowMetrics(
@@ -169,7 +169,7 @@ class TestMetricsCollector:
             avg_cpu_percent=0.0,
             db_query_count=0,
             db_total_time=0.0,
-            db_avg_query_time=0.0
+            db_avg_query_time=0.0,
         )
         wf_dict = workflow_metrics.to_dict()
         assert isinstance(wf_dict, dict)
@@ -188,7 +188,7 @@ class TestMetricsCollector:
             status="completed",
             retry_count=0,
             memory_used=104857600,
-            cpu_time=0.5
+            cpu_time=0.5,
         )
         task_dict = task_metrics.to_dict()
         assert isinstance(task_dict, dict)

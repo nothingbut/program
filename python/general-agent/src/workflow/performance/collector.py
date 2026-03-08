@@ -1,13 +1,19 @@
 """指标收集器实现"""
-from dataclasses import dataclass, field, asdict
+
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import statistics
 
 
+# 常量定义
+BYTES_PER_MB = 1024 * 1024  # 1 MB = 1024 * 1024 bytes
+
+
 @dataclass
 class WorkflowMetrics:
     """工作流级别指标"""
+
     workflow_id: str
     total_tasks: int
     completed_tasks: int
@@ -31,29 +37,26 @@ class WorkflowMetrics:
         """转换为字典"""
         data = asdict(self)
         # 转换 datetime 对象为 ISO 格式字符串
-        data['started_at'] = self.started_at.isoformat()
-        data['completed_at'] = self.completed_at.isoformat() if self.completed_at else None
+        data["started_at"] = self.started_at.isoformat()
+        data["completed_at"] = (
+            self.completed_at.isoformat() if self.completed_at else None
+        )
         return data
 
 
 @dataclass
 class TaskMetrics:
     """任务级别指标"""
+
     task_id: str
     task_name: str
     tool_name: str
     workflow_id: str
-
-    # 时间指标
     started_at: datetime
     completed_at: Optional[datetime]
     duration: float
-
-    # 状态指标
     status: str
     retry_count: int
-
-    # 资源指标
     memory_used: Optional[int] = None
     cpu_time: Optional[float] = None
 
@@ -65,19 +68,21 @@ class TaskMetrics:
             "tool_name": self.tool_name,
             "workflow_id": self.workflow_id,
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "duration": self.duration,
             "status": self.status,
             "retry_count": self.retry_count,
             "memory_used": self.memory_used,
-            "cpu_time": self.cpu_time
+            "cpu_time": self.cpu_time,
         }
 
 
 class MetricsCollector:
     """指标收集器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化收集器"""
         self._workflow_metrics: Dict[str, WorkflowMetrics] = {}
         self._task_metrics: Dict[str, List[TaskMetrics]] = {}
@@ -107,7 +112,7 @@ class MetricsCollector:
             avg_cpu_percent=0.0,
             db_query_count=0,
             db_total_time=0.0,
-            db_avg_query_time=0.0
+            db_avg_query_time=0.0,
         )
         self._workflow_metrics[workflow_id] = metrics
         self._task_metrics[workflow_id] = []
@@ -137,12 +142,18 @@ class MetricsCollector:
 
         # 计算完成时间和总时长
         metrics.completed_at = datetime.now()
-        metrics.total_duration = (metrics.completed_at - metrics.started_at).total_seconds()
+        metrics.total_duration = (
+            metrics.completed_at - metrics.started_at
+        ).total_seconds()
 
         # 更新完成的任务数
-        metrics.completed_tasks = len([t for t in task_metrics if t.status == "completed"])
+        metrics.completed_tasks = len(
+            [t for t in task_metrics if t.status == "completed"]
+        )
         metrics.failed_tasks = len([t for t in task_metrics if t.status == "failed"])
-        metrics.cancelled_tasks = len([t for t in task_metrics if t.status == "cancelled"])
+        metrics.cancelled_tasks = len(
+            [t for t in task_metrics if t.status == "cancelled"]
+        )
 
         # 计算吞吐量（任务/秒）
         if metrics.total_duration > 0:
@@ -160,9 +171,11 @@ class MetricsCollector:
             metrics.p99_task_duration = self._calculate_percentile(sorted_durations, 99)
 
             # 计算内存峰值（从字节转换为MB）
-            memory_values = [t.memory_used for t in task_metrics if t.memory_used is not None]
+            memory_values = [
+                t.memory_used for t in task_metrics if t.memory_used is not None
+            ]
             if memory_values:
-                metrics.peak_memory_mb = max(memory_values) / (1024 * 1024)
+                metrics.peak_memory_mb = max(memory_values) / BYTES_PER_MB
 
             # 计算平均 CPU 时间
             cpu_values = [t.cpu_time for t in task_metrics if t.cpu_time is not None]
