@@ -40,24 +40,38 @@ class WorkflowMetrics:
 class TaskMetrics:
     """任务级别指标"""
     task_id: str
+    task_name: str
+    tool_name: str
     workflow_id: str
-    task_type: str
+
+    # 时间指标
     started_at: datetime
-    completed_at: datetime
+    completed_at: Optional[datetime]
     duration: float
+
+    # 状态指标
     status: str
-    memory_mb: float
-    cpu_percent: float
-    db_queries: int
-    db_time: float
+    retry_count: int
+
+    # 资源指标
+    memory_used: Optional[int] = None
+    cpu_time: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        data = asdict(self)
-        # 转换 datetime 对象为 ISO 格式字符串
-        data['started_at'] = self.started_at.isoformat()
-        data['completed_at'] = self.completed_at.isoformat()
-        return data
+        return {
+            "task_id": self.task_id,
+            "task_name": self.task_name,
+            "tool_name": self.tool_name,
+            "workflow_id": self.workflow_id,
+            "started_at": self.started_at.isoformat(),
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "duration": self.duration,
+            "status": self.status,
+            "retry_count": self.retry_count,
+            "memory_used": self.memory_used,
+            "cpu_time": self.cpu_time
+        }
 
 
 class MetricsCollector:
@@ -145,17 +159,20 @@ class MetricsCollector:
             metrics.p95_task_duration = self._calculate_percentile(sorted_durations, 95)
             metrics.p99_task_duration = self._calculate_percentile(sorted_durations, 99)
 
-            # 计算内存峰值
-            metrics.peak_memory_mb = max(t.memory_mb for t in task_metrics)
+            # 计算内存峰值（从字节转换为MB）
+            memory_values = [t.memory_used for t in task_metrics if t.memory_used is not None]
+            if memory_values:
+                metrics.peak_memory_mb = max(memory_values) / (1024 * 1024)
 
-            # 计算平均 CPU 使用率
-            metrics.avg_cpu_percent = sum(t.cpu_percent for t in task_metrics) / len(task_metrics)
+            # 计算平均 CPU 时间
+            cpu_values = [t.cpu_time for t in task_metrics if t.cpu_time is not None]
+            if cpu_values:
+                metrics.avg_cpu_percent = sum(cpu_values) / len(cpu_values)
 
-            # 计算数据库查询统计
-            metrics.db_query_count = sum(t.db_queries for t in task_metrics)
-            metrics.db_total_time = sum(t.db_time for t in task_metrics)
-            if metrics.db_query_count > 0:
-                metrics.db_avg_query_time = metrics.db_total_time / metrics.db_query_count
+            # 计算数据库查询统计（保留为0，因为TaskMetrics不再包含这些字段）
+            metrics.db_query_count = 0
+            metrics.db_total_time = 0.0
+            metrics.db_avg_query_time = 0.0
 
     def get_workflow_metrics(self, workflow_id: str) -> Optional[WorkflowMetrics]:
         """获取工作流指标

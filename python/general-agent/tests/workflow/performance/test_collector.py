@@ -45,21 +45,23 @@ class TestTaskMetrics:
         """测试创建任务指标"""
         metrics = TaskMetrics(
             task_id="task-1",
+            task_name="Test Task",
+            tool_name="llm:chat",
             workflow_id="wf-1",
-            task_type="transform",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             duration=1.5,
             status="completed",
-            memory_mb=100.0,
-            cpu_percent=50.0,
-            db_queries=5,
-            db_time=0.1
+            retry_count=0,
+            memory_used=104857600,
+            cpu_time=0.5
         )
         assert metrics.task_id == "task-1"
+        assert metrics.task_name == "Test Task"
+        assert metrics.tool_name == "llm:chat"
         assert metrics.workflow_id == "wf-1"
-        assert metrics.task_type == "transform"
         assert metrics.duration == 1.5
+        assert metrics.retry_count == 0
 
 
 class TestMetricsCollector:
@@ -85,16 +87,16 @@ class TestMetricsCollector:
 
         task_metric = TaskMetrics(
             task_id="task-1",
+            task_name="Test Task",
+            tool_name="llm:chat",
             workflow_id="wf-1",
-            task_type="transform",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             duration=1.5,
             status="completed",
-            memory_mb=100.0,
-            cpu_percent=50.0,
-            db_queries=5,
-            db_time=0.1
+            retry_count=0,
+            memory_used=104857600,
+            cpu_time=0.5
         )
         collector.record_task(task_metric)
 
@@ -112,16 +114,16 @@ class TestMetricsCollector:
         for i, duration in enumerate(durations):
             task_metric = TaskMetrics(
                 task_id=f"task-{i}",
+                task_name=f"Test Task {i}",
+                tool_name="llm:chat",
                 workflow_id="wf-1",
-                task_type="transform",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 duration=duration,
                 status="completed",
-                memory_mb=100.0 + i * 10,
-                cpu_percent=50.0,
-                db_queries=5,
-                db_time=0.1
+                retry_count=0,
+                memory_used=(100 + i * 10) * 1024 * 1024,  # 转换为字节
+                cpu_time=0.5
             )
             collector.record_task(task_metric)
 
@@ -143,8 +145,8 @@ class TestMetricsCollector:
         assert metrics.p95_task_duration > metrics.p50_task_duration
         assert metrics.p99_task_duration > metrics.p95_task_duration
 
-        # 验证内存峰值
-        assert metrics.peak_memory_mb == 190.0  # 最后一个任务的内存
+        # 验证内存峰值（最后一个任务：190 MB）
+        assert metrics.peak_memory_mb == 190.0
 
     def test_to_dict_methods(self):
         """测试所有类的 to_dict() 方法"""
@@ -177,18 +179,23 @@ class TestMetricsCollector:
         # 测试 TaskMetrics.to_dict()
         task_metrics = TaskMetrics(
             task_id="task-1",
+            task_name="Test Task",
+            tool_name="llm:chat",
             workflow_id="wf-1",
-            task_type="transform",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             duration=1.5,
             status="completed",
-            memory_mb=100.0,
-            cpu_percent=50.0,
-            db_queries=5,
-            db_time=0.1
+            retry_count=0,
+            memory_used=104857600,
+            cpu_time=0.5
         )
         task_dict = task_metrics.to_dict()
         assert isinstance(task_dict, dict)
         assert task_dict["task_id"] == "task-1"
+        assert task_dict["task_name"] == "Test Task"
+        assert task_dict["tool_name"] == "llm:chat"
         assert task_dict["duration"] == 1.5
+        assert task_dict["retry_count"] == 0
+        assert task_dict["memory_used"] == 104857600
+        assert task_dict["cpu_time"] == 0.5
