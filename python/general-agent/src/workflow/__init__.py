@@ -18,6 +18,14 @@ from .approval_ui import (
     create_approval_handler,
     default_approval_handler
 )
+from .notification import (
+    Notification,
+    NotificationPriority,
+    NotificationChannel,
+    TerminalChannel,
+    DesktopChannel,
+    NotificationManager
+)
 
 __all__ = [
     # Models
@@ -45,5 +53,12 @@ __all__ = [
     # Approval UI
     "ApprovalUI",
     "create_approval_handler",
-    "default_approval_handler"
+    "default_approval_handler",
+    # Notification
+    "Notification",
+    "NotificationPriority",
+    "NotificationChannel",
+    "TerminalChannel",
+    "DesktopChannel",
+    "NotificationManager"
 ]
