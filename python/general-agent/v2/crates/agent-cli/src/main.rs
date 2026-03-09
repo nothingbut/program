@@ -1,7 +1,7 @@
 //! Agent CLI 应用
 
 use agent_core::traits::llm::{CompletionStream, LLMClient};
-use agent_llm::AnthropicClient;
+use agent_llm::{AnthropicClient, OllamaClient};
 use agent_storage::{repository::*, Database};
 use agent_workflow::{ConversationConfig, ConversationFlow, SessionManager};
 use anyhow::{Context, Result};
@@ -20,8 +20,21 @@ struct Cli {
     #[arg(long, env = "AGENT_DB", default_value = "agent.db")]
     db_path: String,
 
+    /// LLM 提供商 (anthropic/ollama)
+    #[arg(long, env = "AGENT_PROVIDER", default_value = "ollama")]
+    provider: String,
+
+    /// API Key (仅 anthropic 需要)
     #[arg(long, env = "ANTHROPIC_API_KEY")]
     api_key: Option<String>,
+
+    /// Ollama 模型名称
+    #[arg(long, env = "OLLAMA_MODEL", default_value = "qwen2.5:0.5b")]
+    ollama_model: String,
+
+    /// Ollama 服务地址
+    #[arg(long, env = "OLLAMA_BASE_URL", default_value = "http://localhost:11434")]
+    ollama_url: String,
 }
 
 #[derive(Subcommand)]
@@ -66,9 +79,9 @@ struct App {
 }
 
 impl App {
-    async fn new(db_path: &str, api_key: Option<String>) -> Result<Self> {
+    async fn new(cli: &Cli) -> Result<Self> {
         // 初始化数据库
-        let db = Database::new(db_path)
+        let db = Database::new(&cli.db_path)
             .await
             .context("Failed to connect to database")?;
         db.migrate().await.context("Failed to run migrations")?;
@@ -79,11 +92,27 @@ impl App {
         let session_manager = Arc::new(SessionManager::new(session_repo, message_repo));
 
         // 创建 LLM 客户端
-        let llm_client: Arc<dyn LLMClient> = if let Some(key) = api_key {
-            Arc::new(AnthropicClient::from_api_key(key)?)
-        } else {
-            Arc::new(AnthropicClient::from_env()?)
+        let llm_client: Arc<dyn LLMClient> = match cli.provider.as_str() {
+            "anthropic" => {
+                if let Some(key) = &cli.api_key {
+                    Arc::new(AnthropicClient::from_api_key(key.clone())?)
+                } else {
+                    Arc::new(AnthropicClient::from_env()?)
+                }
+            }
+            "ollama" => {
+                let config = agent_llm::ollama::OllamaConfig::new(cli.ollama_model.clone())
+                    .with_base_url(cli.ollama_url.clone());
+                Arc::new(OllamaClient::new(config)?)
+            }
+            _ => anyhow::bail!("Unknown provider: {}", cli.provider),
         };
+
+        println!("{} {}", "✓ 使用提供商:".green(), cli.provider.cyan());
+        if cli.provider == "ollama" {
+            println!("{} {}", "  模型:".dimmed(), cli.ollama_model.yellow());
+        }
+        println!();
 
         Ok(Self {
             session_manager,
@@ -248,13 +277,12 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+                .add_directive(tracing::Level::WARN.into()),
         )
         .init();
 
     let cli = Cli::parse();
-
-    let app = App::new(&cli.db_path, cli.api_key).await?;
+    let app = App::new(&cli).await?;
 
     match cli.command {
         Commands::New { title } => app.cmd_new(title).await?,
