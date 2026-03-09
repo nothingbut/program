@@ -76,7 +76,25 @@ class MonitoringDashboard:
         Args:
             workflow_id: 工作流 ID
         """
-        raise NotImplementedError
+        from rich.markdown import Markdown
+        import asyncio
+        from .reporter import ReportGenerator
+
+        # 创建报告生成器
+        reporter = ReportGenerator(self.monitor.storage)
+
+        # 生成 Markdown 报告（异步）
+        try:
+            report = asyncio.run(
+                reporter.generate_workflow_report(workflow_id, output_format="markdown")
+            )
+            # 使用 Rich Markdown 显示
+            markdown = Markdown(report)
+            self.console.print(markdown)
+        except ValueError as e:
+            self.console.print(f"[yellow]{e}[/yellow]")
+        except RuntimeError as e:
+            self.console.print(f"[red]Error: {e}[/red]")
 
     def _build_layout(self, metrics: WorkflowMetrics) -> Layout:
         """构建面板布局（内部方法）

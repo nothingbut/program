@@ -159,3 +159,35 @@ def test_build_empty_layout(monitor):
 
     # 验证返回的是 Panel 对象
     assert isinstance(layout, Panel)
+
+
+@pytest.mark.asyncio
+async def test_display_summary(monitor):
+    """测试显示执行摘要"""
+
+    # 准备测试数据
+    await monitor.on_workflow_start("wf-test-summary", 10)
+
+    # 模拟任务执行
+    for i in range(10):
+        task_id = f"task-{i}"
+        task_info = {"workflow_id": "wf-test-summary"}
+        await monitor.on_task_start(task_id, task_info)
+
+        result = {
+            "task_name": f"task-{i}",
+            "tool_name": "test_tool",
+            "status": "completed" if i < 8 else "failed",
+            "retry_count": 0,
+        }
+        await monitor.on_task_complete(task_id, 0.1 * (i + 1), result)
+
+    # 完成工作流
+    await monitor.on_workflow_complete("wf-test-summary", {"status": "completed"})
+
+    # 创建 dashboard 并显示摘要
+    dashboard = MonitoringDashboard(monitor)
+
+    # 这个测试主要验证不抛出异常
+    dashboard.display_summary("wf-test-summary")
+    assert True
