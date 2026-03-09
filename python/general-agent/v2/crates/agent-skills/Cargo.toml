@@ -4,3 +4,27 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# YAML 解析
+serde = { workspace = true }
+serde_yaml = "0.9"
+
+# Markdown 解析
+pulldown-cmark = "0.9"
+
+# 文件操作
+walkdir = "2.4"
+ignore = "0.4"
+
+# 正则表达式
+regex = "1.10"
+
+# 异步
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# 错误处理
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# 日志
+tracing = { workspace = true }
