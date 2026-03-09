@@ -1,9 +1,7 @@
 """报告生成器"""
 
-import json
-import sqlite3
 from datetime import datetime
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Literal, Dict, Any
 from .storage import MetricsStorage
 from .collector import WorkflowMetrics, TaskMetrics
 
@@ -30,11 +28,46 @@ class ReportGenerator:
 
         Returns:
             报告字符串
+
+        Raises:
+            RuntimeError: 数据库未初始化
+            ValueError: 工作流不存在
         """
-        # 查询工作流指标
-        workflow_metrics = self.storage.query_workflow_metrics(workflow_id)
-        if not workflow_metrics:
+        # 检查数据库是否已初始化
+        if self.storage.db is None:
+            raise RuntimeError(
+                "Database not initialized. Call storage.initialize() first."
+            )
+
+        # 查询工作流指标（异步）
+        cursor = await self.storage.db.execute(
+            "SELECT * FROM workflow_metrics WHERE workflow_id = ?", (workflow_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
             raise ValueError(f"Workflow {workflow_id} not found")
+
+        # 解析工作流指标
+        workflow_metrics = WorkflowMetrics(
+            workflow_id=row[0],
+            total_tasks=row[1],
+            completed_tasks=row[2],
+            failed_tasks=row[3],
+            cancelled_tasks=row[4],
+            started_at=datetime.fromisoformat(row[5]),
+            completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            total_duration=row[7],
+            throughput=row[8],
+            avg_task_duration=row[9],
+            p50_task_duration=row[10],
+            p95_task_duration=row[11],
+            p99_task_duration=row[12],
+            peak_memory_mb=row[13],
+            avg_cpu_percent=row[14],
+            db_query_count=row[15],
+            db_total_time=row[16],
+            db_avg_query_time=row[17],
+        )
 
         # 查询任务指标
         task_metrics = await self._async_get_task_metrics(workflow_id)
@@ -92,29 +125,37 @@ class ReportGenerator:
 
         Returns:
             任务指标列表
+
+        Raises:
+            RuntimeError: 数据库未初始化
         """
-        assert self.storage.db is not None
+        if self.storage.db is None:
+            raise RuntimeError(
+                "Database not initialized. Call storage.initialize() first."
+            )
+
         cursor = await self.storage.db.execute(
-            "SELECT * FROM task_metrics WHERE workflow_id = ?",
-            (workflow_id,)
+            "SELECT * FROM task_metrics WHERE workflow_id = ?", (workflow_id,)
         )
         rows = await cursor.fetchall()
 
         tasks = []
         for row in rows:
-            tasks.append(TaskMetrics(
-                task_id=row[0],
-                task_name=row[1],
-                tool_name=row[2],
-                workflow_id=row[3],
-                started_at=datetime.fromisoformat(row[4]),
-                completed_at=datetime.fromisoformat(row[5]) if row[5] else None,
-                duration=row[6],
-                status=row[7],
-                retry_count=row[8],
-                memory_used=row[9],
-                cpu_time=row[10]
-            ))
+            tasks.append(
+                TaskMetrics(
+                    task_id=row[0],
+                    task_name=row[1],
+                    tool_name=row[2],
+                    workflow_id=row[3],
+                    started_at=datetime.fromisoformat(row[4]),
+                    completed_at=datetime.fromisoformat(row[5]) if row[5] else None,
+                    duration=row[6],
+                    status=row[7],
+                    retry_count=row[8],
+                    memory_used=row[9],
+                    cpu_time=row[10],
+                )
+            )
         return tasks
 
     def _calculate_derived_metrics(
@@ -138,16 +179,15 @@ class ReportGenerator:
 
         # 找出慢任务（耗时超过 P95 的任务）
         slow_tasks = [
-            task for task in task_metrics
+            task
+            for task in task_metrics
             if task.duration > workflow_metrics.p95_task_duration
             and task.status == "completed"
         ]
         slow_tasks.sort(key=lambda t: t.duration, reverse=True)
 
         # 找出失败任务
-        failed_tasks = [
-            task for task in task_metrics if task.status == "failed"
-        ]
+        failed_tasks = [task for task in task_metrics if task.status == "failed"]
 
         # 按工具名称统计
         tool_stats: Dict[str, Dict[str, Any]] = {}
@@ -216,9 +256,7 @@ class ReportGenerator:
         lines.append(f"- **已完成**: {workflow_metrics.completed_tasks}")
         lines.append(f"- **失败**: {workflow_metrics.failed_tasks}")
         lines.append(f"- **取消**: {workflow_metrics.cancelled_tasks}")
-        lines.append(
-            f"- **成功率**: {derived_metrics['success_rate']:.1f}%"
-        )
+        lines.append(f"- **成功率**: {derived_metrics['success_rate']:.1f}%")
         lines.append(f"- **总耗时**: {workflow_metrics.total_duration:.2f}s")
         lines.append(f"- **吞吐量**: {workflow_metrics.throughput:.1f} tasks/s")
         lines.append("")

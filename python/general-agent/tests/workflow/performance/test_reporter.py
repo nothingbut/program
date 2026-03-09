@@ -64,7 +64,7 @@ async def test_generate_markdown_report(storage: MetricsStorage) -> None:
         avg_cpu_percent=45.0,
         db_query_count=0,
         db_total_time=0.0,
-        db_avg_query_time=0.0
+        db_avg_query_time=0.0,
     )
     await storage.store_workflow_metrics(metrics)
 
@@ -79,7 +79,7 @@ async def test_generate_markdown_report(storage: MetricsStorage) -> None:
             completed_at=datetime.now(),
             duration=3.5,
             status="completed",
-            retry_count=0
+            retry_count=0,
         ),
         TaskMetrics(
             task_id="task-2",
@@ -90,7 +90,7 @@ async def test_generate_markdown_report(storage: MetricsStorage) -> None:
             completed_at=datetime.now(),
             duration=2.8,
             status="completed",
-            retry_count=0
+            retry_count=0,
         ),
         TaskMetrics(
             task_id="task-3",
@@ -101,15 +101,17 @@ async def test_generate_markdown_report(storage: MetricsStorage) -> None:
             completed_at=datetime.now(),
             duration=0.5,
             status="failed",
-            retry_count=1
-        )
+            retry_count=1,
+        ),
     ]
     for task_metric in task_metrics:
         await storage.store_task_metrics(task_metric)
 
     # 生成报告
     reporter = ReportGenerator(storage)
-    report = await reporter.generate_workflow_report("wf-test-001", output_format="markdown")
+    report = await reporter.generate_workflow_report(
+        "wf-test-001", output_format="markdown"
+    )
 
     # 验证报告内容
     assert "# 工作流性能报告" in report
@@ -129,3 +131,58 @@ async def test_generate_markdown_report(storage: MetricsStorage) -> None:
     assert "3.50s" in report or "3.5s" in report
     assert "失败任务" in report
     assert "failed_task" in report
+
+
+@pytest.mark.asyncio
+async def test_generate_report_workflow_not_found(storage: MetricsStorage) -> None:
+    """测试工作流不存在时抛出 ValueError"""
+    reporter = ReportGenerator(storage)
+    with pytest.raises(ValueError, match="Workflow .* not found"):
+        await reporter.generate_workflow_report("non-existent")
+
+
+@pytest.mark.asyncio
+async def test_generate_report_empty_tasks(storage: MetricsStorage) -> None:
+    """测试空任务列表"""
+    metrics = WorkflowMetrics(
+        workflow_id="wf-empty",
+        total_tasks=0,
+        completed_tasks=0,
+        failed_tasks=0,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=0.0,
+        throughput=0.0,
+        avg_task_duration=0.0,
+        p50_task_duration=0.0,
+        p95_task_duration=0.0,
+        p99_task_duration=0.0,
+        peak_memory_mb=0.0,
+        avg_cpu_percent=0.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+    await storage.store_workflow_metrics(metrics)
+
+    reporter = ReportGenerator(storage)
+    report = await reporter.generate_workflow_report("wf-empty")
+
+    # 验证可以处理空任务列表
+    assert "# 工作流性能报告" in report
+    assert "wf-empty" in report
+    assert "总任务数" in report
+    assert "0" in report
+    # 空任务时不应该有慢任务和失败任务部分
+    # 但应该有其他基础信息
+
+
+@pytest.mark.asyncio
+async def test_generate_report_db_not_initialized() -> None:
+    """测试数据库未初始化时抛出 RuntimeError"""
+    storage = MetricsStorage(":memory:")
+    # 故意不调用 initialize()
+    reporter = ReportGenerator(storage)
+    with pytest.raises(RuntimeError, match="Database not initialized"):
+        await reporter.generate_workflow_report("test-001")
