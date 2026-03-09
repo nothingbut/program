@@ -7,5 +7,7 @@
 //! - 参数验证
 
 pub mod models;
+pub mod parser;
 
 pub use models::{SkillDefinition, SkillExecutionContext, SkillParameter};
+pub use parser::{ParseError, SkillParser};

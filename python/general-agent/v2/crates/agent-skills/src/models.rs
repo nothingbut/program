@@ -319,7 +319,9 @@ mod tests {
 
         let result = context.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Required parameter 'name' is missing"));
+        assert!(result
+            .unwrap_err()
+            .contains("Required parameter 'name' is missing"));
     }
 
     #[test]
