@@ -25,13 +25,224 @@ async def test_reporter_initialization(storage: MetricsStorage) -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_comparison_report_not_implemented(
+async def test_generate_comparison_report_markdown(storage: MetricsStorage) -> None:
+    """测试生成 Markdown 对比报告"""
+    # 准备三个工作流的测试数据
+    workflows = [
+        WorkflowMetrics(
+            workflow_id="wf-fast",
+            total_tasks=100,
+            completed_tasks=98,
+            failed_tasks=2,
+            cancelled_tasks=0,
+            started_at=datetime(2026, 3, 8, 10, 0, 0),
+            completed_at=datetime(2026, 3, 8, 10, 10, 0),
+            total_duration=600.0,
+            throughput=10.0,
+            avg_task_duration=0.5,
+            p50_task_duration=0.4,
+            p95_task_duration=0.8,
+            p99_task_duration=1.0,
+            peak_memory_mb=100.0,
+            avg_cpu_percent=40.0,
+            db_query_count=0,
+            db_total_time=0.0,
+            db_avg_query_time=0.0,
+        ),
+        WorkflowMetrics(
+            workflow_id="wf-slow",
+            total_tasks=100,
+            completed_tasks=90,
+            failed_tasks=10,
+            cancelled_tasks=0,
+            started_at=datetime(2026, 3, 8, 11, 0, 0),
+            completed_at=datetime(2026, 3, 8, 11, 20, 0),
+            total_duration=1200.0,
+            throughput=5.0,
+            avg_task_duration=1.0,
+            p50_task_duration=0.8,
+            p95_task_duration=2.5,
+            p99_task_duration=3.0,
+            peak_memory_mb=200.0,
+            avg_cpu_percent=60.0,
+            db_query_count=0,
+            db_total_time=0.0,
+            db_avg_query_time=0.0,
+        ),
+        WorkflowMetrics(
+            workflow_id="wf-medium",
+            total_tasks=100,
+            completed_tasks=95,
+            failed_tasks=5,
+            cancelled_tasks=0,
+            started_at=datetime(2026, 3, 8, 12, 0, 0),
+            completed_at=datetime(2026, 3, 8, 12, 12, 0),
+            total_duration=720.0,
+            throughput=8.0,
+            avg_task_duration=0.7,
+            p50_task_duration=0.6,
+            p95_task_duration=1.5,
+            p99_task_duration=2.0,
+            peak_memory_mb=150.0,
+            avg_cpu_percent=50.0,
+            db_query_count=0,
+            db_total_time=0.0,
+            db_avg_query_time=0.0,
+        ),
+    ]
+
+    # 存储所有工作流指标
+    for wf_metrics in workflows:
+        await storage.store_workflow_metrics(wf_metrics)
+
+    # 生成对比报告
+    reporter = ReportGenerator(storage)
+    report = await reporter.generate_comparison_report(
+        ["wf-fast", "wf-slow", "wf-medium"], output_format="markdown"
+    )
+
+    # 验证报告内容
+    assert "# 工作流对比报告" in report
+    assert "wf-fast" in report
+    assert "wf-slow" in report
+    assert "wf-medium" in report
+
+    # 验证表格列
+    assert "工作流 ID" in report
+    assert "任务数" in report
+    assert "成功率" in report
+    assert "吞吐量" in report
+    assert "P95 延迟" in report
+
+    # 验证数据
+    assert "98.0%" in report  # wf-fast 成功率
+    assert "90.0%" in report  # wf-slow 成功率
+    assert "95.0%" in report  # wf-medium 成功率
+    assert "10.0" in report  # wf-fast 吞吐量
+    assert "5.0" in report  # wf-slow 吞吐量
+    assert "800ms" in report or "0.8" in report  # wf-fast P95 延迟
+
+    # 验证亮点部分
+    assert "对比亮点" in report or "亮点" in report
+    assert "最高吞吐量" in report or "吞吐量" in report
+    assert "最低延迟" in report or "延迟" in report
+    assert "最高成功率" in report or "成功率" in report
+
+
+@pytest.mark.asyncio
+async def test_generate_comparison_report_workflow_not_found(
     storage: MetricsStorage,
 ) -> None:
-    """测试 generate_comparison_report 未实现"""
+    """测试对比报告时工作流不存在"""
+    # 只存储一个工作流
+    metrics = WorkflowMetrics(
+        workflow_id="wf-exists",
+        total_tasks=100,
+        completed_tasks=95,
+        failed_tasks=5,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=10.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.4,
+        p95_task_duration=0.8,
+        p99_task_duration=1.0,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=40.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+    await storage.store_workflow_metrics(metrics)
+
     reporter = ReportGenerator(storage)
-    with pytest.raises(NotImplementedError):
-        reporter.generate_comparison_report(["test-001", "test-002"])
+
+    # 尝试对比不存在的工作流
+    with pytest.raises(ValueError, match="Workflow .* not found"):
+        await reporter.generate_comparison_report(
+            ["wf-exists", "wf-not-exists"], output_format="markdown"
+        )
+
+
+@pytest.mark.asyncio
+async def test_generate_comparison_report_json(storage: MetricsStorage) -> None:
+    """测试生成 JSON 对比报告"""
+    import json
+
+    # 准备两个工作流的测试数据
+    workflows = [
+        WorkflowMetrics(
+            workflow_id="wf-001",
+            total_tasks=100,
+            completed_tasks=95,
+            failed_tasks=5,
+            cancelled_tasks=0,
+            started_at=datetime(2026, 3, 8, 10, 0, 0),
+            completed_at=datetime(2026, 3, 8, 10, 10, 0),
+            total_duration=600.0,
+            throughput=10.0,
+            avg_task_duration=0.5,
+            p50_task_duration=0.4,
+            p95_task_duration=0.8,
+            p99_task_duration=1.0,
+            peak_memory_mb=100.0,
+            avg_cpu_percent=40.0,
+            db_query_count=0,
+            db_total_time=0.0,
+            db_avg_query_time=0.0,
+        ),
+        WorkflowMetrics(
+            workflow_id="wf-002",
+            total_tasks=100,
+            completed_tasks=90,
+            failed_tasks=10,
+            cancelled_tasks=0,
+            started_at=datetime(2026, 3, 8, 11, 0, 0),
+            completed_at=datetime(2026, 3, 8, 11, 20, 0),
+            total_duration=1200.0,
+            throughput=5.0,
+            avg_task_duration=1.0,
+            p50_task_duration=0.8,
+            p95_task_duration=2.5,
+            p99_task_duration=3.0,
+            peak_memory_mb=200.0,
+            avg_cpu_percent=60.0,
+            db_query_count=0,
+            db_total_time=0.0,
+            db_avg_query_time=0.0,
+        ),
+    ]
+
+    # 存储所有工作流指标
+    for wf_metrics in workflows:
+        await storage.store_workflow_metrics(wf_metrics)
+
+    # 生成 JSON 对比报告
+    reporter = ReportGenerator(storage)
+    report = await reporter.generate_comparison_report(
+        ["wf-001", "wf-002"], output_format="json"
+    )
+
+    # 解析并验证
+    data = json.loads(report)
+    assert "workflows" in data
+    assert len(data["workflows"]) == 2
+    assert data["workflows"][0]["workflow_id"] == "wf-001"
+    assert data["workflows"][0]["total_tasks"] == 100
+    assert abs(data["workflows"][0]["success_rate"] - 95.0) < 0.1
+    assert data["workflows"][1]["workflow_id"] == "wf-002"
+    assert abs(data["workflows"][1]["success_rate"] - 90.0) < 0.1
+
+    # 验证亮点
+    assert "highlights" in data
+    assert "best_throughput" in data["highlights"]
+    assert "best_latency" in data["highlights"]
+    assert "best_success_rate" in data["highlights"]
+    assert data["highlights"]["best_throughput"]["workflow_id"] == "wf-001"
+    assert data["highlights"]["best_latency"]["workflow_id"] == "wf-001"
+    assert data["highlights"]["best_success_rate"]["workflow_id"] == "wf-001"
 
 
 @pytest.mark.asyncio

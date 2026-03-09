@@ -88,7 +88,7 @@ class ReportGenerator:
                 workflow_metrics, task_metrics, derived_metrics
             )
 
-    def generate_comparison_report(
+    async def generate_comparison_report(
         self,
         workflow_ids: List[str],
         output_format: Literal["markdown", "json"] = "markdown",
@@ -101,8 +101,175 @@ class ReportGenerator:
 
         Returns:
             对比报告字符串
+
+        Raises:
+            RuntimeError: 数据库未初始化
+            ValueError: 任一工作流不存在
         """
-        raise NotImplementedError
+        # 检查数据库是否已初始化
+        if self.storage.db is None:
+            raise RuntimeError(
+                "Database not initialized. Call storage.initialize() first."
+            )
+
+        # 查询所有工作流指标
+        workflows_data = []
+        for workflow_id in workflow_ids:
+            cursor = await self.storage.db.execute(
+                "SELECT * FROM workflow_metrics WHERE workflow_id = ?", (workflow_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                raise ValueError(f"Workflow {workflow_id} not found")
+
+            # 解析工作流指标
+            workflow_metrics = WorkflowMetrics(
+                workflow_id=row[0],
+                total_tasks=row[1],
+                completed_tasks=row[2],
+                failed_tasks=row[3],
+                cancelled_tasks=row[4],
+                started_at=datetime.fromisoformat(row[5]),
+                completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+                total_duration=row[7],
+                throughput=row[8],
+                avg_task_duration=row[9],
+                p50_task_duration=row[10],
+                p95_task_duration=row[11],
+                p99_task_duration=row[12],
+                peak_memory_mb=row[13],
+                avg_cpu_percent=row[14],
+                db_query_count=row[15],
+                db_total_time=row[16],
+                db_avg_query_time=row[17],
+            )
+
+            # 计算成功率
+            success_rate = 0.0
+            if workflow_metrics.total_tasks > 0:
+                success_rate = (
+                    workflow_metrics.completed_tasks
+                    / workflow_metrics.total_tasks
+                    * 100
+                )
+
+            workflows_data.append(
+                {
+                    "metrics": workflow_metrics,
+                    "success_rate": success_rate,
+                }
+            )
+
+        # 生成报告
+        if output_format == "markdown":
+            return self._generate_comparison_markdown(workflows_data)
+        else:
+            return self._generate_comparison_json(workflows_data)
+
+    def _generate_comparison_markdown(
+        self, workflows_data: List[Dict[str, Any]]
+    ) -> str:
+        """生成 Markdown 格式的对比报告
+
+        Args:
+            workflows_data: 工作流数据列表
+
+        Returns:
+            Markdown 格式的对比报告字符串
+        """
+        lines = []
+
+        # 标题
+        lines.append("# 工作流对比报告")
+        lines.append("")
+
+        # 对比表格
+        lines.append("## 性能对比")
+        lines.append("")
+        lines.append("| 工作流 ID | 任务数 | 成功率 | 吞吐量 (tasks/s) | P95 延迟 |")
+        lines.append("|----------|--------|--------|-----------------|---------|")
+
+        for data in workflows_data:
+            metrics = data["metrics"]
+            success_rate = data["success_rate"]
+            p95_latency_ms = metrics.p95_task_duration * 1000
+
+            lines.append(
+                f"| {metrics.workflow_id} | {metrics.total_tasks} | "
+                f"{success_rate:.1f}% | {metrics.throughput:.1f} | {p95_latency_ms:.0f}ms |"
+            )
+
+        lines.append("")
+
+        # 对比亮点
+        lines.append("## 对比亮点")
+        lines.append("")
+
+        # 找出最优值
+        best_throughput = max(workflows_data, key=lambda x: x["metrics"].throughput)
+        best_latency = min(workflows_data, key=lambda x: x["metrics"].p95_task_duration)
+        best_success_rate = max(workflows_data, key=lambda x: x["success_rate"])
+
+        lines.append(
+            f"- **最高吞吐量**: {best_throughput['metrics'].workflow_id} "
+            f"({best_throughput['metrics'].throughput:.1f} tasks/s)"
+        )
+        lines.append(
+            f"- **最低 P95 延迟**: {best_latency['metrics'].workflow_id} "
+            f"({best_latency['metrics'].p95_task_duration * 1000:.0f}ms)"
+        )
+        lines.append(
+            f"- **最高成功率**: {best_success_rate['metrics'].workflow_id} "
+            f"({best_success_rate['success_rate']:.1f}%)"
+        )
+        lines.append("")
+
+        return "\n".join(lines)
+
+    def _generate_comparison_json(self, workflows_data: List[Dict[str, Any]]) -> str:
+        """生成 JSON 格式的对比报告
+
+        Args:
+            workflows_data: 工作流数据列表
+
+        Returns:
+            JSON 格式的对比报告字符串
+        """
+        # 构建对比数据
+        comparison_data: Dict[str, Any] = {
+            "workflows": [
+                {
+                    "workflow_id": data["metrics"].workflow_id,
+                    "total_tasks": data["metrics"].total_tasks,
+                    "success_rate": data["success_rate"],
+                    "throughput": data["metrics"].throughput,
+                    "p95_latency": data["metrics"].p95_task_duration,
+                }
+                for data in workflows_data
+            ]
+        }
+
+        # 计算最优值
+        best_throughput = max(workflows_data, key=lambda x: x["metrics"].throughput)
+        best_latency = min(workflows_data, key=lambda x: x["metrics"].p95_task_duration)
+        best_success_rate = max(workflows_data, key=lambda x: x["success_rate"])
+
+        comparison_data["highlights"] = {
+            "best_throughput": {
+                "workflow_id": best_throughput["metrics"].workflow_id,
+                "value": best_throughput["metrics"].throughput,
+            },
+            "best_latency": {
+                "workflow_id": best_latency["metrics"].workflow_id,
+                "value": best_latency["metrics"].p95_task_duration,
+            },
+            "best_success_rate": {
+                "workflow_id": best_success_rate["metrics"].workflow_id,
+                "value": best_success_rate["success_rate"],
+            },
+        }
+
+        return json.dumps(comparison_data, indent=2)
 
     async def export_metrics(
         self, workflow_id: str, output_format: Literal["json"] = "json"
