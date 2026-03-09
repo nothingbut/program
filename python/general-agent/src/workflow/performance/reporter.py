@@ -1,7 +1,11 @@
 """报告生成器"""
 
-from typing import List, Literal
+import json
+import sqlite3
+from datetime import datetime
+from typing import List, Literal, Optional, Dict, Any
 from .storage import MetricsStorage
+from .collector import WorkflowMetrics, TaskMetrics
 
 
 class ReportGenerator:
@@ -15,7 +19,7 @@ class ReportGenerator:
         """
         self.storage = storage
 
-    def generate_workflow_report(
+    async def generate_workflow_report(
         self, workflow_id: str, output_format: Literal["markdown", "json"] = "markdown"
     ) -> str:
         """生成单个工作流报告
@@ -27,7 +31,28 @@ class ReportGenerator:
         Returns:
             报告字符串
         """
-        raise NotImplementedError
+        # 查询工作流指标
+        workflow_metrics = self.storage.query_workflow_metrics(workflow_id)
+        if not workflow_metrics:
+            raise ValueError(f"Workflow {workflow_id} not found")
+
+        # 查询任务指标
+        task_metrics = await self._async_get_task_metrics(workflow_id)
+
+        # 计算派生指标
+        derived_metrics = self._calculate_derived_metrics(
+            workflow_metrics, task_metrics
+        )
+
+        # 生成报告
+        if output_format == "markdown":
+            return self._generate_markdown_report(
+                workflow_metrics, task_metrics, derived_metrics
+            )
+        else:
+            return self._generate_json_report(
+                workflow_metrics, task_metrics, derived_metrics
+            )
 
     def generate_comparison_report(
         self,
@@ -56,5 +81,223 @@ class ReportGenerator:
 
         Returns:
             指标数据字符串
+        """
+        raise NotImplementedError
+
+    async def _async_get_task_metrics(self, workflow_id: str) -> List[TaskMetrics]:
+        """异步查询工作流的所有任务指标
+
+        Args:
+            workflow_id: 工作流 ID
+
+        Returns:
+            任务指标列表
+        """
+        assert self.storage.db is not None
+        cursor = await self.storage.db.execute(
+            "SELECT * FROM task_metrics WHERE workflow_id = ?",
+            (workflow_id,)
+        )
+        rows = await cursor.fetchall()
+
+        tasks = []
+        for row in rows:
+            tasks.append(TaskMetrics(
+                task_id=row[0],
+                task_name=row[1],
+                tool_name=row[2],
+                workflow_id=row[3],
+                started_at=datetime.fromisoformat(row[4]),
+                completed_at=datetime.fromisoformat(row[5]) if row[5] else None,
+                duration=row[6],
+                status=row[7],
+                retry_count=row[8],
+                memory_used=row[9],
+                cpu_time=row[10]
+            ))
+        return tasks
+
+    def _calculate_derived_metrics(
+        self, workflow_metrics: WorkflowMetrics, task_metrics: List[TaskMetrics]
+    ) -> Dict[str, Any]:
+        """计算派生指标
+
+        Args:
+            workflow_metrics: 工作流指标
+            task_metrics: 任务指标列表
+
+        Returns:
+            派生指标字典
+        """
+        # 计算成功率
+        success_rate = 0.0
+        if workflow_metrics.total_tasks > 0:
+            success_rate = (
+                workflow_metrics.completed_tasks / workflow_metrics.total_tasks * 100
+            )
+
+        # 找出慢任务（耗时超过 P95 的任务）
+        slow_tasks = [
+            task for task in task_metrics
+            if task.duration > workflow_metrics.p95_task_duration
+            and task.status == "completed"
+        ]
+        slow_tasks.sort(key=lambda t: t.duration, reverse=True)
+
+        # 找出失败任务
+        failed_tasks = [
+            task for task in task_metrics if task.status == "failed"
+        ]
+
+        # 按工具名称统计
+        tool_stats: Dict[str, Dict[str, Any]] = {}
+        for task in task_metrics:
+            if task.tool_name not in tool_stats:
+                tool_stats[task.tool_name] = {
+                    "count": 0,
+                    "total_duration": 0.0,
+                    "failed_count": 0,
+                }
+            tool_stats[task.tool_name]["count"] += 1
+            tool_stats[task.tool_name]["total_duration"] += task.duration
+            if task.status == "failed":
+                tool_stats[task.tool_name]["failed_count"] += 1
+
+        # 计算每个工具的平均耗时
+        for tool_name in tool_stats:
+            count = tool_stats[tool_name]["count"]
+            if count > 0:
+                tool_stats[tool_name]["avg_duration"] = (
+                    tool_stats[tool_name]["total_duration"] / count
+                )
+
+        return {
+            "success_rate": success_rate,
+            "slow_tasks": slow_tasks[:10],  # 只取前 10 个最慢的
+            "failed_tasks": failed_tasks[:10],  # 只取前 10 个失败任务
+            "tool_stats": tool_stats,
+        }
+
+    def _generate_markdown_report(
+        self,
+        workflow_metrics: WorkflowMetrics,
+        task_metrics: List[TaskMetrics],
+        derived_metrics: Dict[str, Any],
+    ) -> str:
+        """生成 Markdown 格式报告
+
+        Args:
+            workflow_metrics: 工作流指标
+            task_metrics: 任务指标列表
+            derived_metrics: 派生指标
+
+        Returns:
+            Markdown 格式的报告字符串
+        """
+        lines = []
+
+        # 标题
+        lines.append("# 工作流性能报告")
+        lines.append("")
+        lines.append(f"**工作流 ID**: {workflow_metrics.workflow_id}")
+        lines.append(
+            f"**执行时间**: {workflow_metrics.started_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        if workflow_metrics.completed_at:
+            lines.append(
+                f"**完成时间**: {workflow_metrics.completed_at.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        lines.append("")
+
+        # 概览
+        lines.append("## 概览")
+        lines.append("")
+        lines.append(f"- **总任务数**: {workflow_metrics.total_tasks}")
+        lines.append(f"- **已完成**: {workflow_metrics.completed_tasks}")
+        lines.append(f"- **失败**: {workflow_metrics.failed_tasks}")
+        lines.append(f"- **取消**: {workflow_metrics.cancelled_tasks}")
+        lines.append(
+            f"- **成功率**: {derived_metrics['success_rate']:.1f}%"
+        )
+        lines.append(f"- **总耗时**: {workflow_metrics.total_duration:.2f}s")
+        lines.append(f"- **吞吐量**: {workflow_metrics.throughput:.1f} tasks/s")
+        lines.append("")
+
+        # 性能指标
+        lines.append("## 性能指标")
+        lines.append("")
+        lines.append(
+            f"- **平均任务耗时**: {workflow_metrics.avg_task_duration * 1000:.0f}ms"
+        )
+        lines.append(
+            f"- **P50 延迟**: {workflow_metrics.p50_task_duration * 1000:.0f}ms"
+        )
+        lines.append(
+            f"- **P95 延迟**: {workflow_metrics.p95_task_duration * 1000:.0f}ms"
+        )
+        lines.append(
+            f"- **P99 延迟**: {workflow_metrics.p99_task_duration * 1000:.0f}ms"
+        )
+        lines.append(f"- **峰值内存**: {workflow_metrics.peak_memory_mb:.1f} MB")
+        lines.append(f"- **平均 CPU**: {workflow_metrics.avg_cpu_percent:.1f}%")
+        lines.append("")
+
+        # 慢任务
+        if derived_metrics["slow_tasks"]:
+            lines.append("## 慢任务 (Top 10)")
+            lines.append("")
+            lines.append("| 任务名称 | 工具 | 耗时 | 重试次数 |")
+            lines.append("|---------|------|------|---------|")
+            for task in derived_metrics["slow_tasks"]:
+                lines.append(
+                    f"| {task.task_name} | {task.tool_name} | "
+                    f"{task.duration:.2f}s | {task.retry_count} |"
+                )
+            lines.append("")
+
+        # 失败任务
+        if derived_metrics["failed_tasks"]:
+            lines.append("## 失败任务")
+            lines.append("")
+            lines.append("| 任务名称 | 工具 | 耗时 | 重试次数 |")
+            lines.append("|---------|------|------|---------|")
+            for task in derived_metrics["failed_tasks"]:
+                lines.append(
+                    f"| {task.task_name} | {task.tool_name} | "
+                    f"{task.duration:.2f}s | {task.retry_count} |"
+                )
+            lines.append("")
+
+        # 工具统计
+        if derived_metrics["tool_stats"]:
+            lines.append("## 工具统计")
+            lines.append("")
+            lines.append("| 工具名称 | 调用次数 | 平均耗时 | 失败次数 |")
+            lines.append("|---------|---------|---------|---------|")
+            for tool_name, stats in derived_metrics["tool_stats"].items():
+                avg_duration = stats.get("avg_duration", 0.0)
+                lines.append(
+                    f"| {tool_name} | {stats['count']} | "
+                    f"{avg_duration * 1000:.0f}ms | {stats['failed_count']} |"
+                )
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _generate_json_report(
+        self,
+        workflow_metrics: WorkflowMetrics,
+        task_metrics: List[TaskMetrics],
+        derived_metrics: Dict[str, Any],
+    ) -> str:
+        """生成 JSON 格式报告
+
+        Args:
+            workflow_metrics: 工作流指标
+            task_metrics: 任务指标列表
+            derived_metrics: 派生指标
+
+        Returns:
+            JSON 格式的报告字符串
         """
         raise NotImplementedError
