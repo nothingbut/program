@@ -9,7 +9,9 @@
 pub mod loader;
 pub mod models;
 pub mod parser;
+pub mod registry;
 
 pub use loader::{LoadError, SkillLoader};
 pub use models::{SkillDefinition, SkillExecutionContext, SkillParameter};
 pub use parser::{ParseError, SkillParser};
+pub use registry::{RegistryError, SkillRegistry};
