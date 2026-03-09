@@ -1,13 +1,13 @@
 """报告生成器"""
-from typing import List, Dict, Any, Optional
+
+from typing import List, Literal
 from .storage import MetricsStorage
-from .collector import WorkflowMetrics, TaskMetrics
 
 
 class ReportGenerator:
     """报告生成器 - 生成 Markdown/JSON 格式的性能报告"""
 
-    def __init__(self, storage: MetricsStorage):
+    def __init__(self, storage: MetricsStorage) -> None:
         """初始化
 
         Args:
@@ -16,15 +16,13 @@ class ReportGenerator:
         self.storage = storage
 
     def generate_workflow_report(
-        self,
-        workflow_id: str,
-        format: str = "markdown"
+        self, workflow_id: str, output_format: Literal["markdown", "json"] = "markdown"
     ) -> str:
         """生成单个工作流报告
 
         Args:
             workflow_id: 工作流 ID
-            format: 输出格式（"markdown" 或 "json"）
+            output_format: 输出格式（"markdown" 或 "json"）
 
         Returns:
             报告字符串
@@ -34,13 +32,13 @@ class ReportGenerator:
     def generate_comparison_report(
         self,
         workflow_ids: List[str],
-        format: str = "markdown"
+        output_format: Literal["markdown", "json"] = "markdown",
     ) -> str:
         """生成对比报告
 
         Args:
             workflow_ids: 工作流 ID 列表
-            format: 输出格式
+            output_format: 输出格式
 
         Returns:
             对比报告字符串
@@ -48,15 +46,13 @@ class ReportGenerator:
         raise NotImplementedError
 
     def export_metrics(
-        self,
-        workflow_id: str,
-        format: str = "json"
+        self, workflow_id: str, output_format: Literal["json"] = "json"
     ) -> str:
         """导出原始指标
 
         Args:
             workflow_id: 工作流 ID
-            format: 输出格式（目前只支持 "json"）
+            output_format: 输出格式（目前只支持 "json"）
 
         Returns:
             指标数据字符串
