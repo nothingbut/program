@@ -1,0 +1,268 @@
+//! Agent CLI 应用
+
+use agent_core::traits::llm::{CompletionStream, LLMClient};
+use agent_llm::AnthropicClient;
+use agent_storage::{repository::*, Database};
+use agent_workflow::{ConversationConfig, ConversationFlow, SessionManager};
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use colored::*;
+use std::sync::Arc;
+use uuid::Uuid;
+
+#[derive(Parser)]
+#[command(name = "agent")]
+#[command(about = "General Agent - AI 对话助手", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+
+    #[arg(long, env = "AGENT_DB", default_value = "agent.db")]
+    db_path: String,
+
+    #[arg(long, env = "ANTHROPIC_API_KEY")]
+    api_key: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// 创建新会话
+    New {
+        /// 会话标题
+        #[arg(short, long)]
+        title: Option<String>,
+    },
+    /// 列出所有会话
+    List {
+        /// 显示数量
+        #[arg(short, long, default_value = "10")]
+        limit: u32,
+    },
+    /// 开始对话
+    Chat {
+        /// 会话 ID
+        session_id: String,
+        /// 是否使用流式输出
+        #[arg(short, long)]
+        stream: bool,
+    },
+    /// 删除会话
+    Delete {
+        /// 会话 ID
+        session_id: String,
+    },
+    /// 搜索会话
+    Search {
+        /// 搜索关键词
+        query: String,
+        #[arg(short, long, default_value = "10")]
+        limit: u32,
+    },
+}
+
+struct App {
+    session_manager: Arc<SessionManager>,
+    llm_client: Arc<dyn LLMClient>,
+}
+
+impl App {
+    async fn new(db_path: &str, api_key: Option<String>) -> Result<Self> {
+        // 初始化数据库
+        let db = Database::new(db_path)
+            .await
+            .context("Failed to connect to database")?;
+        db.migrate().await.context("Failed to run migrations")?;
+
+        // 创建仓库
+        let session_repo = Arc::new(SqliteSessionRepository::new(db.pool().clone()));
+        let message_repo = Arc::new(SqliteMessageRepository::new(db.pool().clone()));
+        let session_manager = Arc::new(SessionManager::new(session_repo, message_repo));
+
+        // 创建 LLM 客户端
+        let llm_client: Arc<dyn LLMClient> = if let Some(key) = api_key {
+            Arc::new(AnthropicClient::from_api_key(key)?)
+        } else {
+            Arc::new(AnthropicClient::from_env()?)
+        };
+
+        Ok(Self {
+            session_manager,
+            llm_client,
+        })
+    }
+
+    async fn cmd_new(&self, title: Option<String>) -> Result<()> {
+        let session = self.session_manager.create_session(title).await?;
+
+        println!("{}", "✓ 会话创建成功".green().bold());
+        println!("ID: {}", session.id.to_string().cyan());
+        if let Some(t) = session.title {
+            println!("标题: {}", t.yellow());
+        }
+
+        Ok(())
+    }
+
+    async fn cmd_list(&self, limit: u32) -> Result<()> {
+        let sessions = self.session_manager.list_sessions(limit, 0).await?;
+
+        if sessions.is_empty() {
+            println!("{}", "没有找到会话".yellow());
+            return Ok(());
+        }
+
+        println!("{}", "会话列表:".bold());
+        println!();
+
+        for session in sessions {
+            let msg_count = self
+                .session_manager
+                .count_messages(session.id)
+                .await
+                .unwrap_or(0);
+
+            println!("  {} {}", "●".cyan(), session.id.to_string().cyan());
+            if let Some(title) = session.title {
+                println!("    标题: {}", title.yellow());
+            }
+            println!(
+                "    消息数: {} | 更新: {}",
+                msg_count.to_string().green(),
+                session.updated_at.format("%Y-%m-%d %H:%M").to_string().dimmed()
+            );
+            println!();
+        }
+
+        Ok(())
+    }
+
+    async fn cmd_chat(&self, session_id_str: &str, use_stream: bool) -> Result<()> {
+        let session_id = Uuid::parse_str(session_id_str).context("Invalid session ID")?;
+
+        // 验证会话存在
+        let session = self.session_manager.load_session(session_id).await?;
+
+        println!("{}", "进入对话模式 (输入 'exit' 退出)".green().bold());
+        if let Some(title) = session.title {
+            println!("会话: {}", title.yellow());
+        }
+        println!();
+
+        // 创建对话流程
+        let config = ConversationConfig::default();
+        let flow = ConversationFlow::new(
+            self.session_manager.clone(),
+            self.llm_client.clone(),
+            config,
+        );
+
+        // 对话循环
+        loop {
+            print!("{} ", "You:".blue().bold());
+            std::io::Write::flush(&mut std::io::stdout())?;
+
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+
+            if input.is_empty() {
+                continue;
+            }
+
+            if input.eq_ignore_ascii_case("exit") {
+                println!("{}", "再见！".green());
+                break;
+            }
+
+            print!("{} ", "AI:".cyan().bold());
+            std::io::Write::flush(&mut std::io::stdout())?;
+
+            if use_stream {
+                // 流式输出
+                let (mut stream, context) = flow
+                    .send_message_stream(session_id, input.to_string())
+                    .await?;
+
+                let mut full_response = String::new();
+
+                while let Some(chunk) = stream.next().await? {
+                    if !chunk.is_final {
+                        print!("{}", chunk.delta);
+                        std::io::Write::flush(&mut std::io::stdout())?;
+                        full_response.push_str(&chunk.delta);
+                    }
+                }
+
+                println!();
+                println!();
+
+                // 保存响应
+                context.save_response(full_response).await?;
+            } else {
+                // 非流式输出
+                let response = flow.send_message(session_id, input.to_string()).await?;
+                println!("{}", response);
+                println!();
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn cmd_delete(&self, session_id_str: &str) -> Result<()> {
+        let session_id = Uuid::parse_str(session_id_str).context("Invalid session ID")?;
+
+        self.session_manager.delete_session(session_id).await?;
+
+        println!("{}", "✓ 会话已删除".green().bold());
+
+        Ok(())
+    }
+
+    async fn cmd_search(&self, query: &str, limit: u32) -> Result<()> {
+        let sessions = self.session_manager.search_sessions(query, limit).await?;
+
+        if sessions.is_empty() {
+            println!("{}", "没有找到匹配的会话".yellow());
+            return Ok(());
+        }
+
+        println!("{} '{}':", "搜索结果".bold(), query.yellow());
+        println!();
+
+        for session in sessions {
+            println!("  {} {}", "●".cyan(), session.id.to_string().cyan());
+            if let Some(title) = session.title {
+                println!("    标题: {}", title.yellow());
+            }
+            println!();
+        }
+
+        Ok(())
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // 初始化日志
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
+        .init();
+
+    let cli = Cli::parse();
+
+    let app = App::new(&cli.db_path, cli.api_key).await?;
+
+    match cli.command {
+        Commands::New { title } => app.cmd_new(title).await?,
+        Commands::List { limit } => app.cmd_list(limit).await?,
+        Commands::Chat { session_id, stream } => app.cmd_chat(&session_id, stream).await?,
+        Commands::Delete { session_id } => app.cmd_delete(&session_id).await?,
+        Commands::Search { query, limit } => app.cmd_search(&query, limit).await?,
+    }
+
+    Ok(())
+}
