@@ -1,5 +1,6 @@
 """AlertManager 测试"""
 
+import pytest
 from datetime import datetime
 from src.workflow.performance.alerts import AlertManager, AlertConfig, Alert
 
@@ -61,3 +62,235 @@ def test_alert_manager_with_notifier() -> None:
     manager = AlertManager(config, notifier=mock_notifier)
     assert manager.config == config
     assert manager.notifier is mock_notifier
+
+
+@pytest.mark.asyncio
+async def test_check_high_failure_rate() -> None:
+    """测试高失败率告警"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(failure_rate_threshold=0.05)
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-001",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,  # 10% 失败率
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,
+        p99_task_duration=0.5,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    assert len(alerts) == 1
+    assert alerts[0].alert_type == "high_failure_rate"
+    assert alerts[0].severity == "high"
+    assert "10.0%" in alerts[0].message or "0.1" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_check_high_p95_latency() -> None:
+    """测试高 P95 延迟告警"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(p95_latency_threshold=2.0)
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-002",
+        total_tasks=100,
+        completed_tasks=100,
+        failed_tasks=0,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=3.0,  # 超过阈值
+        p99_task_duration=4.0,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    assert len(alerts) == 1
+    assert alerts[0].alert_type == "high_p95_latency"
+    assert alerts[0].severity == "medium"
+
+
+@pytest.mark.asyncio
+async def test_check_multiple_alerts() -> None:
+    """测试多个告警同时触发"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(failure_rate_threshold=0.05, memory_threshold_mb=100.0)
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-003",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,  # 触发失败率告警
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,
+        p99_task_duration=0.5,
+        peak_memory_mb=150.0,  # 触发内存告警
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    assert len(alerts) == 2
+    alert_types = [a.alert_type for a in alerts]
+    assert "high_failure_rate" in alert_types
+    assert "memory_exhaustion" in alert_types
+
+
+@pytest.mark.asyncio
+async def test_alert_deduplication() -> None:
+    """测试告警去重"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(failure_rate_threshold=0.05)
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-004",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,
+        p99_task_duration=0.5,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    # 第一次检查
+    alerts1 = await manager.check_alerts(metrics)
+    assert len(alerts1) == 1
+
+    # 第二次检查（应该去重）
+    alerts2 = await manager.check_alerts(metrics)
+    assert len(alerts2) == 0  # 相同告警不重复触发
+
+
+@pytest.mark.asyncio
+async def test_check_all_alert_types() -> None:
+    """测试所有 6 种告警类型"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(
+        failure_rate_threshold=0.05,
+        p95_latency_threshold=2.0,
+        p99_latency_threshold=5.0,
+        memory_threshold_mb=100.0,
+        cpu_threshold_percent=80.0,
+        db_query_time_threshold=1.0,
+    )
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-005",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,  # 触发失败率告警
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=3.0,  # 触发 P95 延迟告警
+        p99_task_duration=6.0,  # 触发 P99 延迟告警
+        peak_memory_mb=150.0,  # 触发内存告警
+        avg_cpu_percent=85.0,  # 触发 CPU 告警
+        db_query_count=10,
+        db_total_time=15.0,
+        db_avg_query_time=1.5,  # 触发数据库告警
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    assert len(alerts) == 6
+    alert_types = {a.alert_type for a in alerts}
+    assert alert_types == {
+        "high_failure_rate",
+        "high_p95_latency",
+        "high_p99_latency",
+        "memory_exhaustion",
+        "high_cpu_usage",
+        "slow_database",
+    }
+
+
+@pytest.mark.asyncio
+async def test_check_no_alerts() -> None:
+    """测试正常指标不触发告警"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig()
+    manager = AlertManager(config)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-006",
+        total_tasks=100,
+        completed_tasks=100,
+        failed_tasks=0,  # 0% 失败率
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,  # 低于阈值
+        p99_task_duration=1.0,  # 低于阈值
+        peak_memory_mb=100.0,  # 低于阈值
+        avg_cpu_percent=50.0,  # 低于阈值
+        db_query_count=10,
+        db_total_time=5.0,
+        db_avg_query_time=0.5,  # 低于阈值
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    assert len(alerts) == 0

@@ -76,7 +76,97 @@ class AlertManager:
         Returns:
             触发的告警列表
         """
-        raise NotImplementedError
+        alerts = []
+
+        # 1. 检查失败率
+        if metrics.total_tasks > 0:
+            failure_rate = metrics.failed_tasks / metrics.total_tasks
+            if failure_rate > self.config.failure_rate_threshold:
+                if self._should_alert(metrics.workflow_id, "high_failure_rate"):
+                    alerts.append(
+                        Alert(
+                            alert_type="high_failure_rate",
+                            severity="high",
+                            message=f"失败率过高: {failure_rate:.1%} (阈值: {self.config.failure_rate_threshold:.1%})",
+                            workflow_id=metrics.workflow_id,
+                            metrics={"failure_rate": failure_rate},
+                        )
+                    )
+
+        # 2. 检查 P95 延迟
+        if metrics.p95_task_duration > self.config.p95_latency_threshold:
+            if self._should_alert(metrics.workflow_id, "high_p95_latency"):
+                alerts.append(
+                    Alert(
+                        alert_type="high_p95_latency",
+                        severity="medium",
+                        message=f"P95 延迟过高: {metrics.p95_task_duration:.2f}s (阈值: {self.config.p95_latency_threshold:.2f}s)",
+                        workflow_id=metrics.workflow_id,
+                        metrics={"p95_latency": metrics.p95_task_duration},
+                    )
+                )
+
+        # 3. 检查 P99 延迟
+        if metrics.p99_task_duration > self.config.p99_latency_threshold:
+            if self._should_alert(metrics.workflow_id, "high_p99_latency"):
+                alerts.append(
+                    Alert(
+                        alert_type="high_p99_latency",
+                        severity="high",
+                        message=f"P99 延迟过高: {metrics.p99_task_duration:.2f}s (阈值: {self.config.p99_latency_threshold:.2f}s)",
+                        workflow_id=metrics.workflow_id,
+                        metrics={"p99_latency": metrics.p99_task_duration},
+                    )
+                )
+
+        # 4. 检查内存使用
+        if metrics.peak_memory_mb > self.config.memory_threshold_mb:
+            if self._should_alert(metrics.workflow_id, "memory_exhaustion"):
+                alerts.append(
+                    Alert(
+                        alert_type="memory_exhaustion",
+                        severity="high",
+                        message=f"内存使用过高: {metrics.peak_memory_mb:.1f}MB (阈值: {self.config.memory_threshold_mb:.1f}MB)",
+                        workflow_id=metrics.workflow_id,
+                        metrics={"peak_memory_mb": metrics.peak_memory_mb},
+                    )
+                )
+
+        # 5. 检查 CPU 使用
+        if metrics.avg_cpu_percent > self.config.cpu_threshold_percent:
+            if self._should_alert(metrics.workflow_id, "high_cpu_usage"):
+                alerts.append(
+                    Alert(
+                        alert_type="high_cpu_usage",
+                        severity="medium",
+                        message=f"CPU 使用率过高: {metrics.avg_cpu_percent:.1f}% (阈值: {self.config.cpu_threshold_percent:.1f}%)",
+                        workflow_id=metrics.workflow_id,
+                        metrics={"avg_cpu_percent": metrics.avg_cpu_percent},
+                    )
+                )
+
+        # 6. 检查数据库性能
+        if metrics.db_avg_query_time > self.config.db_query_time_threshold:
+            if self._should_alert(metrics.workflow_id, "slow_database"):
+                alerts.append(
+                    Alert(
+                        alert_type="slow_database",
+                        severity="medium",
+                        message=f"数据库查询慢: {metrics.db_avg_query_time:.2f}s (阈值: {self.config.db_query_time_threshold:.2f}s)",
+                        workflow_id=metrics.workflow_id,
+                        metrics={"db_avg_query_time": metrics.db_avg_query_time},
+                    )
+                )
+
+        # 发送通知并记录活动告警
+        for alert in alerts:
+            await self._send_notification(alert)
+            # 记录到活动告警
+            if metrics.workflow_id not in self.active_alerts:
+                self.active_alerts[metrics.workflow_id] = []
+            self.active_alerts[metrics.workflow_id].append(alert)
+
+        return alerts
 
     async def check_task_alert(self, task_metrics: TaskMetrics) -> List[Alert]:
         """检查任务级别告警（可选）
@@ -95,7 +185,13 @@ class AlertManager:
         Args:
             alert: 告警对象
         """
-        raise NotImplementedError
+        if not self.notifier:
+            # 没有通知器，只记录日志
+            logger.warning(f"Alert: {alert.alert_type} - {alert.message}")
+            return
+
+        # Task 7 将实现真正的通知集成
+        pass
 
     def _should_alert(self, workflow_id: str, alert_type: str) -> bool:
         """去重检查（内部方法）
