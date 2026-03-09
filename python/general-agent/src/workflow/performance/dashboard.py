@@ -85,6 +85,18 @@ class MonitoringDashboard:
 
         # 生成 Markdown 报告（异步）
         try:
+            # 检查是否已有运行中的事件循环
+            try:
+                asyncio.get_running_loop()
+                # 如果已经在事件循环中，提示用户使用异步版本
+                self.console.print(
+                    "[yellow]注意: 请在异步上下文中使用 display_summary_async() 方法[/yellow]"
+                )
+                return
+            except RuntimeError:
+                # 没有运行中的事件循环，可以使用 asyncio.run()
+                pass
+
             report = asyncio.run(
                 reporter.generate_workflow_report(workflow_id, output_format="markdown")
             )
@@ -93,7 +105,32 @@ class MonitoringDashboard:
             self.console.print(markdown)
         except ValueError as e:
             self.console.print(f"[yellow]{e}[/yellow]")
-        except RuntimeError as e:
+        except Exception as e:
+            self.console.print(f"[red]Error: {e}[/red]")
+
+    async def display_summary_async(self, workflow_id: str) -> None:
+        """显示执行摘要（异步版本）
+
+        Args:
+            workflow_id: 工作流 ID
+        """
+        from rich.markdown import Markdown
+        from .reporter import ReportGenerator
+
+        # 创建报告生成器
+        reporter = ReportGenerator(self.monitor.storage)
+
+        # 生成 Markdown 报告（异步）
+        try:
+            report = await reporter.generate_workflow_report(
+                workflow_id, output_format="markdown"
+            )
+            # 使用 Rich Markdown 显示
+            markdown = Markdown(report)
+            self.console.print(markdown)
+        except ValueError as e:
+            self.console.print(f"[yellow]{e}[/yellow]")
+        except Exception as e:
             self.console.print(f"[red]Error: {e}[/red]")
 
     def _build_layout(self, metrics: WorkflowMetrics) -> Layout:

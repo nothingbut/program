@@ -1,8 +1,8 @@
 """指标存储"""
 import aiosqlite
 import json
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from datetime import datetime
+from typing import Dict, Any, Optional
 from .collector import WorkflowMetrics, TaskMetrics
 from .tracer import TaskTrace
 

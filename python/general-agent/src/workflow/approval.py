@@ -263,10 +263,10 @@ class ApprovalManager:
 
         # 根据工具类型生成原因
         reasons = {
-            "mcp": f"MCP 工具调用可能修改系统状态",
-            "skill": f"技能执行可能产生副作用",
-            "rag": f"RAG 操作可能访问敏感数据",
-            "llm": f"LLM 调用可能产生不可预测的结果"
+            "mcp": "MCP 工具调用可能修改系统状态",
+            "skill": "技能执行可能产生副作用",
+            "rag": "RAG 操作可能访问敏感数据",
+            "llm": "LLM 调用可能产生不可预测的结果"
         }
 
         base_reason = reasons.get(tool_type, "需要用户确认")

@@ -287,9 +287,9 @@ class ExecutionContext:
 
         # 遍历字段路径
         current = result
-        for field in field_path:
+        for fld in field_path:
             if isinstance(current, dict):
-                current = current.get(field)
+                current = current.get(fld)
             elif hasattr(current, field):
                 current = getattr(current, field)
             else:

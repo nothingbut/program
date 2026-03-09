@@ -1,7 +1,17 @@
 """Ollama LLM 客户端"""
 import httpx
-from typing import List
+from typing import List, Optional
+from dataclasses import dataclass
 from .llm_client import ChatMessage
+
+
+@dataclass
+class OllamaConfig:
+    """Ollama 配置"""
+    base_url: str = "http://localhost:11434"
+    model: str = "qwen2.5:7b"
+    temperature: float = 0.7
+    timeout: float = 120.0
 
 
 class OllamaClient:
@@ -11,11 +21,17 @@ class OllamaClient:
         self,
         base_url: str = "http://localhost:11434",
         model: str = "qwen2.5:7b",
-        timeout: int = 120
+        timeout: int = 120,
+        config: Optional[OllamaConfig] = None
     ):
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.timeout = timeout
+        if config:
+            self.base_url = config.base_url.rstrip("/")
+            self.model = config.model
+            self.timeout = int(config.timeout)
+        else:
+            self.base_url = base_url.rstrip("/")
+            self.model = model
+            self.timeout = timeout
 
     async def chat(self, messages: List[ChatMessage]) -> str:
         """聊天完成"""

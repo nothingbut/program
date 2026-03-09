@@ -5,15 +5,13 @@ import uuid
 import random
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Set
-from collections import deque
 
 from .models import (
     Workflow,
     Task,
     TaskStatus,
     WorkflowStatus,
-    ExecutionContext,
-    ToolResult
+    ExecutionContext
 )
 from .orchestrator import ToolOrchestrator
 

@@ -51,8 +51,27 @@
 - 会话管理（创建、切换、列表）
 - 与 Web 完全共享会话数据
 
+### Phase 7: Agent Workflow System ✅
+- 工作流编排器（DAG 依赖解析和并行执行）
+- 任务执行引擎（重试、超时、取消、暂停/恢复）
+- 条件执行、动态任务生成、优先级调度
+- 审批管理系统（Manual/Auto/Threshold 策略）
+- Rich TUI 审批界面（多选项交互）
+- 多渠道通知系统（终端/桌面/日志）
+- 完整性能监控框架（指标收集、链路追踪）
+- Markdown/JSON 报告生成器
+- 智能告警系统（6 种告警规则）
+- 实时监控面板（实时/快照/摘要模式）
+
+详细文档见：
+- [工作流系统设计](docs/plans/2026-03-06-phase7-agent-workflow.md)
+- [监控面板设计](docs/plans/2026-03-09-monitoring-dashboard.md)
+- [审批 UI 文档](docs/workflow/approval-ui.md)
+- [通知系统文档](docs/workflow/notification-system.md)
+- [集成测试文档](docs/workflow/integration-tests.md)
+
 ### 未来版本
-- 高级功能（Phase 7+）
+- 高级功能（Phase 8+）
 
 ## 快速开始
 
