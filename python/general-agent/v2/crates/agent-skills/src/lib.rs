@@ -6,8 +6,10 @@
 //! - 命名空间管理
 //! - 参数验证
 
+pub mod loader;
 pub mod models;
 pub mod parser;
 
+pub use loader::{LoadError, SkillLoader};
 pub use models::{SkillDefinition, SkillExecutionContext, SkillParameter};
 pub use parser::{ParseError, SkillParser};

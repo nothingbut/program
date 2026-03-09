@@ -28,3 +28,6 @@ anyhow = { workspace = true }
 
 # 日志
 tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"
