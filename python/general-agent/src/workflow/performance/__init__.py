@@ -6,6 +6,7 @@ from .storage import InMemoryBuffer, MetricsStorage
 from .monitor import PerformanceMonitor
 from .reporter import ReportGenerator
 from .alerts import AlertManager, AlertConfig, Alert
+from .dashboard import MonitoringDashboard
 
 __all__ = [
     "WorkflowMetrics",
@@ -21,4 +22,5 @@ __all__ = [
     "AlertManager",
     "AlertConfig",
     "Alert",
+    "MonitoringDashboard",
 ]
