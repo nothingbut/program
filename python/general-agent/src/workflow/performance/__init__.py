@@ -1,9 +1,11 @@
 """性能监控模块"""
+
 from .collector import WorkflowMetrics, TaskMetrics, MetricsCollector
 from .tracer import Span, TaskTrace, TraceRecorder
 from .storage import InMemoryBuffer, MetricsStorage
 from .monitor import PerformanceMonitor
 from .reporter import ReportGenerator
+from .alerts import AlertManager, AlertConfig, Alert
 
 __all__ = [
     "WorkflowMetrics",
@@ -16,4 +18,7 @@ __all__ = [
     "MetricsStorage",
     "PerformanceMonitor",
     "ReportGenerator",
+    "AlertManager",
+    "AlertConfig",
+    "Alert",
 ]
