@@ -4,6 +4,8 @@ import asyncio
 from typing import Optional
 from rich.console import Console
 from rich.layout import Layout
+from rich.panel import Panel
+from rich.text import Text
 
 from .monitor import PerformanceMonitor
 from .collector import WorkflowMetrics
@@ -42,7 +44,13 @@ class MonitoringDashboard:
         Args:
             workflow_id: 工作流 ID
         """
-        raise NotImplementedError
+        metrics = self.monitor.get_current_metrics(workflow_id)
+        if not metrics:
+            self.console.print(f"[yellow]工作流 {workflow_id} 未找到[/yellow]")
+            return
+
+        layout = self._build_layout(metrics)
+        self.console.print(layout)
 
     def display_summary(self, workflow_id: str) -> None:
         """显示执行摘要
@@ -61,4 +69,115 @@ class MonitoringDashboard:
         Returns:
             Rich Layout 对象
         """
-        raise NotImplementedError
+        layout = Layout()
+
+        # 创建 3 个面板
+        overview_panel = self._build_overview_panel(metrics)
+        performance_panel = self._build_performance_panel(metrics)
+        status_panel = self._build_status_panel(metrics)
+
+        # 组合布局（垂直排列）
+        layout.split_column(overview_panel, performance_panel, status_panel)
+
+        return layout
+
+    def _build_overview_panel(self, metrics: WorkflowMetrics) -> Panel:
+        """构建概览面板
+
+        Args:
+            metrics: 工作流指标
+
+        Returns:
+            概览 Panel
+        """
+        # 计算进度
+        progress = 0.0
+        if metrics.total_tasks > 0:
+            completed = metrics.completed_tasks + metrics.failed_tasks
+            progress = completed / metrics.total_tasks
+
+        # 状态
+        status = "RUNNING" if metrics.completed_at is None else "COMPLETED"
+        status_color = "yellow" if status == "RUNNING" else "green"
+
+        # 格式化时长
+        duration_str = f"{int(metrics.total_duration // 60):02d}:{int(metrics.total_duration % 60):02d}"
+
+        content = Text()
+        content.append("状态: ", style="bold")
+        content.append(f"{status}", style=f"bold {status_color}")
+        content.append("  |  进度: ", style="bold")
+        content.append(
+            f"{metrics.completed_tasks + metrics.failed_tasks}/{metrics.total_tasks} ({progress:.0%})"
+        )
+        content.append("\n")
+        content.append("执行时间: ", style="bold")
+        content.append(f"{duration_str}")
+        content.append("  |  吞吐量: ", style="bold")
+        content.append(f"{metrics.throughput:.1f} tasks/s")
+
+        return Panel(
+            content,
+            title=f"工作流监控: {metrics.workflow_id[:12]}...",
+            border_style="cyan",
+        )
+
+    def _build_performance_panel(self, metrics: WorkflowMetrics) -> Panel:
+        """构建性能指标面板
+
+        Args:
+            metrics: 工作流指标
+
+        Returns:
+            性能指标 Panel
+        """
+
+        # 格式化延迟
+        def format_duration(seconds: float) -> str:
+            if seconds < 1:
+                return f"{int(seconds * 1000)}ms"
+            else:
+                return f"{seconds:.1f}s"
+
+        content = Text()
+        content.append("平均延迟: ", style="bold")
+        content.append(f"{format_duration(metrics.avg_task_duration):<10}")
+        content.append("P95: ", style="bold")
+        content.append(f"{format_duration(metrics.p95_task_duration):<10}")
+        content.append("P99: ", style="bold")
+        content.append(f"{format_duration(metrics.p99_task_duration)}")
+        content.append("\n")
+        content.append("CPU 使用: ", style="bold")
+        content.append(f"{metrics.avg_cpu_percent:.0f}%{' ' * 6}")
+        content.append("内存: ", style="bold")
+        content.append(f"{metrics.peak_memory_mb:.0f} MB")
+
+        return Panel(content, title="性能指标", border_style="green")
+
+    def _build_status_panel(self, metrics: WorkflowMetrics) -> Panel:
+        """构建任务状态面板
+
+        Args:
+            metrics: 工作流指标
+
+        Returns:
+            任务状态 Panel
+        """
+        running = (
+            metrics.total_tasks
+            - metrics.completed_tasks
+            - metrics.failed_tasks
+            - metrics.cancelled_tasks
+        )
+
+        content = Text()
+        content.append("✓ 完成: ", style="green")
+        content.append(f"{metrics.completed_tasks:<5}")
+        content.append("✗ 失败: ", style="red")
+        content.append(f"{metrics.failed_tasks:<5}")
+        content.append("⏸ 取消: ", style="yellow")
+        content.append(f"{metrics.cancelled_tasks:<5}")
+        content.append("⏳ 运行: ", style="cyan")
+        content.append(f"{running}")
+
+        return Panel(content, title="任务状态", border_style="blue")
