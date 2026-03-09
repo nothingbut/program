@@ -49,3 +49,15 @@ pub struct ChatMessage {
 pub struct ChatResponse {
     pub message: ChatMessage,
 }
+
+/// Ollama 流式响应（每行一个 JSON 对象）
+#[derive(Debug, Deserialize)]
+pub struct ChatStreamResponse {
+    pub model: String,
+    #[serde(default)]
+    pub message: Option<ChatMessage>,
+    #[serde(default)]
+    pub done: bool,
+    #[serde(default)]
+    pub done_reason: Option<String>,
+}

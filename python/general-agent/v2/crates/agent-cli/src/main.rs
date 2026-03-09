@@ -1,6 +1,6 @@
 //! Agent CLI 应用
 
-use agent_core::traits::llm::{CompletionStream, LLMClient};
+use agent_core::traits::llm::LLMClient;
 use agent_llm::{AnthropicClient, OllamaClient};
 use agent_storage::{repository::*, Database};
 use agent_workflow::{ConversationConfig, ConversationFlow, SessionManager};

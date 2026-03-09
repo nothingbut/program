@@ -8,10 +8,11 @@
 ## 📊 项目概况
 
 ### 完成状态
-- **代码行数:** 3,840+ 行
-- **测试覆盖:** 75 个测试全部通过
+- **代码行数:** 4,010+ 行
+- **测试覆盖:** 79 个测试全部通过
 - **Crate 数量:** 5 个
 - **完成度:** 100%
+- **更新日期:** 2026-03-09 (添加 Ollama 流式支持)
 
 ### 架构图
 ```
@@ -59,7 +60,7 @@ agent-core (核心模型 + Traits)
 - 消息批量操作
 - 分页和搜索支持
 
-### 3. agent-llm (~700 行, 11 测试)
+### 3. agent-llm (~870 行, 15 测试)
 **Anthropic Claude 集成:**
 - 完整的 Messages API 支持
 - 流式响应（SSE）
@@ -68,11 +69,13 @@ agent-core (核心模型 + Traits)
 
 **Ollama 本地集成:**
 - 本地模型支持
+- 流式响应（JSON 逐行格式）✅
 - 默认 qwen2.5:0.5b
 - 可配置服务地址
 
 **共同特性:**
 - 统一的 LLMClient 接口
+- 流式和非流式模式
 - 完整的错误处理
 - 配置管理
 
@@ -186,6 +189,7 @@ v2/
 │   │   │   │   └── types.rs
 │   │   │   └── ollama/
 │   │   │       ├── client.rs
+│   │   │       ├── stream.rs    # ✅ 新增
 │   │   │       └── types.rs
 │   │   └── Cargo.toml
 │   │
@@ -202,12 +206,14 @@ v2/
 │
 ├── docs/
 │   └── progress/
-│       ├── week1-day1-2.md      # Week 1 Day 1-2 报告
-│       ├── week1-day3-4.md      # Week 1 Day 3-4 报告
-│       ├── week1-day5.md        # Week 1 Day 5 报告
-│       ├── week2-day1-2.md      # Week 2 Day 1-2 报告
-│       ├── week2-day3-5.md      # Week 2 Day 3-5 报告
-│       └── week3-complete.md    # Week 3 完成报告
+│       ├── week1-day1-2.md               # Week 1 Day 1-2 报告
+│       ├── week1-day3-4.md               # Week 1 Day 3-4 报告
+│       ├── week1-day5.md                 # Week 1 Day 5 报告
+│       ├── week2-day1-2.md               # Week 2 Day 1-2 报告
+│       ├── week2-day3-5.md               # Week 2 Day 3-5 报告
+│       ├── week3-complete.md             # Week 3 完成报告
+│       ├── ollama-streaming-complete.md  # Ollama 流式修复报告 ✅
+│       └── session-handoff.md            # 项目交接文档
 │
 └── Cargo.toml                   # Workspace 配置
 ```
@@ -257,27 +263,30 @@ pub async fn build_context(&self, session_id: Uuid) -> Result<Vec<Message>> {
 ## 🐛 已知问题
 
 ### 1. Ollama 流式支持
-- **状态:** 未实现
-- **原因:** Ollama API 流式响应格式不同
-- **影响:** 使用 `--stream` 参数会报错
-- **解决:** 暂时使用非流式模式
+- **状态:** ✅ 已修复 (2026-03-09)
+- **实现:** 添加 `OllamaStream` 实现 JSON 逐行解析
+- **测试:** 4 个新增单元测试 + 集成测试通过
+- **详情:** 见 [ollama-streaming-complete.md](ollama-streaming-complete.md)
 
 ### 2. Token 统计
 - **状态:** Ollama 不返回 token 统计
 - **影响:** `usage` 字段为 0
-- **解决:** 可以考虑本地计算 token 数
+- **解决方案:** 可以考虑本地计算 token 数（未实现）
+- **优先级:** LOW
 
-### 3. 警告信息
-- **agent-llm:** 8 个 dead_code 警告（未使用的字段）
-- **影响:** 仅编译警告，不影响功能
-- **解决:** 可以添加 `#[allow(dead_code)]`
+### 3. 编译警告
+- **状态:** agent-llm 有 9 个 dead_code 警告
+- **原因:** API 响应结构体中的未使用字段
+- **影响:** 仅编译时警告，不影响功能
+- **决策:** 保留字段以保持 API 完整性
+- **优先级:** LOW
 
 ---
 
 ## 🔧 可能的改进
 
 ### 功能增强
-- [ ] Ollama 流式响应支持
+- [x] Ollama 流式响应支持 ✅
 - [ ] 消息编辑和删除功能
 - [ ] 会话标签系统
 - [ ] 导出对话记录
@@ -315,19 +324,25 @@ b3aed54 feat(v2): 实现 agent-core 核心模型和 traits
 
 ## 🎯 下次会话建议
 
-### 优先级 P0: 修复 Ollama 流式
-实现 Ollama 的流式响应支持，使 `--stream` 参数可用。
+### ~~优先级 P0: 修复 Ollama 流式~~ ✅ 已完成
+~~实现 Ollama 的流式响应支持，使 `--stream` 参数可用。~~
 
 ### 优先级 P1: 集成测试
 添加端到端的集成测试，验证完整流程。
 
-### 优先级 P2: 文档完善
+### 优先级 P2: 实现技能系统 (按原计划 Week 5-6)
+- Markdown 技能文件解析
+- 技能注册和加载
+- 技能执行引擎
+- 与 workflow 集成
+
+### 优先级 P3: TUI 界面 (按原计划 Week 7-8)
+使用 `ratatui` 实现终端 UI，提供更好的用户体验。
+
+### 优先级 P4: 文档完善
 - README.md 使用指南
 - API 文档
 - 架构文档
-
-### 可选: TUI 实现
-使用 `ratatui` 实现终端 UI，提供更好的用户体验。
 
 ---
 

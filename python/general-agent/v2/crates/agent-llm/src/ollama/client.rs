@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use tracing::{debug, info};
 
+use super::stream::OllamaStream;
 use super::types::{ChatMessage, ChatRequest, ChatResponse, OllamaConfig};
 
 pub struct OllamaClient {
@@ -89,8 +90,36 @@ impl LLMClient for OllamaClient {
         })
     }
 
-    async fn stream(&self, _request: CompletionRequest) -> Result<Box<dyn CompletionStream>> {
-        Err(agent_core::Error::LLM("Ollama streaming not yet implemented".to_string()))
+    async fn stream(&self, request: CompletionRequest) -> Result<Box<dyn CompletionStream>> {
+        info!("Sending streaming request to Ollama");
+
+        let chat_messages = self.convert_messages(&request.messages);
+
+        let ollama_request = ChatRequest {
+            model: self.config.model.clone(),
+            messages: chat_messages,
+            stream: Some(true),
+        };
+
+        let url = format!("{}/api/chat", self.config.base_url);
+
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&ollama_request)
+            .send()
+            .await
+            .map_err(|e| agent_core::Error::LLM(format!("HTTP request failed: {}", e)))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(agent_core::Error::LLM(format!("API request failed with status {}: {}", status, body)));
+        }
+
+        debug!("Received streaming response from Ollama");
+
+        Ok(Box::new(OllamaStream::new(response)))
     }
 
     async fn list_models(&self) -> Result<Vec<ModelInfo>> {
@@ -100,7 +129,7 @@ impl LLMClient for OllamaClient {
             provider: "ollama".to_string(),
             context_window: None,
             max_output_tokens: None,
-            supports_streaming: false,
+            supports_streaming: true,
         }])
     }
 
