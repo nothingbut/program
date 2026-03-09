@@ -1,5 +1,6 @@
 """报告生成器"""
 
+import json
 from datetime import datetime
 from typing import List, Literal, Dict, Any
 from .storage import MetricsStorage
@@ -103,7 +104,7 @@ class ReportGenerator:
         """
         raise NotImplementedError
 
-    def export_metrics(
+    async def export_metrics(
         self, workflow_id: str, output_format: Literal["json"] = "json"
     ) -> str:
         """导出原始指标
@@ -114,8 +115,64 @@ class ReportGenerator:
 
         Returns:
             指标数据字符串
+
+        Raises:
+            ValueError: 不支持的格式或工作流不存在
+            RuntimeError: 数据库未初始化
         """
-        raise NotImplementedError
+        if output_format != "json":
+            raise ValueError(f"Unsupported format: {output_format}")
+
+        # 检查数据库是否已初始化
+        if self.storage.db is None:
+            raise RuntimeError(
+                "Database not initialized. Call storage.initialize() first."
+            )
+
+        # 查询工作流指标
+        cursor = await self.storage.db.execute(
+            "SELECT * FROM workflow_metrics WHERE workflow_id = ?", (workflow_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise ValueError(f"Workflow {workflow_id} not found")
+
+        # 解析工作流指标
+        workflow_metrics = WorkflowMetrics(
+            workflow_id=row[0],
+            total_tasks=row[1],
+            completed_tasks=row[2],
+            failed_tasks=row[3],
+            cancelled_tasks=row[4],
+            started_at=datetime.fromisoformat(row[5]),
+            completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            total_duration=row[7],
+            throughput=row[8],
+            avg_task_duration=row[9],
+            p50_task_duration=row[10],
+            p95_task_duration=row[11],
+            p99_task_duration=row[12],
+            peak_memory_mb=row[13],
+            avg_cpu_percent=row[14],
+            db_query_count=row[15],
+            db_total_time=row[16],
+            db_avg_query_time=row[17],
+        )
+
+        # 查询任务指标
+        task_metrics = await self._async_get_task_metrics(workflow_id)
+
+        # 查询追踪数据（简化：返回空列表）
+        traces: List[Dict[str, Any]] = []
+
+        # 构建导出数据
+        export_data = {
+            "workflow_metrics": workflow_metrics.to_dict(),
+            "task_metrics": [tm.to_dict() for tm in task_metrics],
+            "traces": traces,
+        }
+
+        return json.dumps(export_data, indent=2)
 
     async def _async_get_task_metrics(self, workflow_id: str) -> List[TaskMetrics]:
         """异步查询工作流的所有任务指标
@@ -338,4 +395,57 @@ class ReportGenerator:
         Returns:
             JSON 格式的报告字符串
         """
-        raise NotImplementedError
+        report_data = {
+            "workflow_id": workflow_metrics.workflow_id,
+            "execution": {
+                "started_at": workflow_metrics.started_at.isoformat(),
+                "completed_at": (
+                    workflow_metrics.completed_at.isoformat()
+                    if workflow_metrics.completed_at
+                    else None
+                ),
+                "total_duration": workflow_metrics.total_duration,
+            },
+            "summary": {
+                "total_tasks": workflow_metrics.total_tasks,
+                "completed_tasks": workflow_metrics.completed_tasks,
+                "failed_tasks": workflow_metrics.failed_tasks,
+                "cancelled_tasks": workflow_metrics.cancelled_tasks,
+                "success_rate": derived_metrics["success_rate"],
+            },
+            "performance": {
+                "throughput": workflow_metrics.throughput,
+                "avg_latency": workflow_metrics.avg_task_duration,
+                "p50_latency": workflow_metrics.p50_task_duration,
+                "p95_latency": workflow_metrics.p95_task_duration,
+                "p99_latency": workflow_metrics.p99_task_duration,
+            },
+            "resources": {
+                "peak_memory_mb": workflow_metrics.peak_memory_mb,
+                "avg_cpu_percent": workflow_metrics.avg_cpu_percent,
+            },
+            "slow_tasks": [
+                {
+                    "task_id": t.task_id,
+                    "task_name": t.task_name,
+                    "tool_name": t.tool_name,
+                    "duration": t.duration,
+                    "retry_count": t.retry_count,
+                }
+                for t in derived_metrics["slow_tasks"]
+            ],
+            "failed_tasks": [
+                {
+                    "task_id": t.task_id,
+                    "task_name": t.task_name,
+                    "tool_name": t.tool_name,
+                    "duration": t.duration,
+                    "status": t.status,
+                    "retry_count": t.retry_count,
+                }
+                for t in derived_metrics["failed_tasks"]
+            ],
+            "tool_stats": derived_metrics["tool_stats"],
+        }
+
+        return json.dumps(report_data, indent=2)

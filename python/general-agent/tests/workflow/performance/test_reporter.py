@@ -35,11 +35,11 @@ async def test_generate_comparison_report_not_implemented(
 
 
 @pytest.mark.asyncio
-async def test_export_metrics_not_implemented(storage: MetricsStorage) -> None:
-    """测试 export_metrics 未实现"""
+async def test_export_metrics_workflow_not_found(storage: MetricsStorage) -> None:
+    """测试 export_metrics 工作流不存在"""
     reporter = ReportGenerator(storage)
-    with pytest.raises(NotImplementedError):
-        reporter.export_metrics("test-001")
+    with pytest.raises(ValueError, match="Workflow .* not found"):
+        await reporter.export_metrics("test-001")
 
 
 @pytest.mark.asyncio
@@ -186,3 +186,148 @@ async def test_generate_report_db_not_initialized() -> None:
     reporter = ReportGenerator(storage)
     with pytest.raises(RuntimeError, match="Database not initialized"):
         await reporter.generate_workflow_report("test-001")
+
+
+@pytest.mark.asyncio
+async def test_generate_json_report(storage: MetricsStorage) -> None:
+    """测试生成 JSON 报告"""
+    import json
+
+    # 准备测试数据
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-002",
+        total_tasks=100,
+        completed_tasks=95,
+        failed_tasks=3,
+        cancelled_tasks=2,
+        started_at=datetime(2026, 3, 8, 15, 30, 0),
+        completed_at=datetime(2026, 3, 8, 15, 32, 34),
+        total_duration=154.2,
+        throughput=18.5,
+        avg_task_duration=0.24,
+        p50_task_duration=0.12,
+        p95_task_duration=0.85,
+        p99_task_duration=1.2,
+        peak_memory_mb=128.0,
+        avg_cpu_percent=45.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+    await storage.store_workflow_metrics(metrics)
+
+    # 添加任务指标
+    task_metrics = [
+        TaskMetrics(
+            task_id="task-1",
+            task_name="llm:summarize",
+            tool_name="llm:summarize",
+            workflow_id="wf-test-002",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            duration=3.5,
+            status="completed",
+            retry_count=0,
+        ),
+        TaskMetrics(
+            task_id="task-2",
+            task_name="mcp:api:call",
+            tool_name="mcp:api:call",
+            workflow_id="wf-test-002",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            duration=2.8,
+            status="completed",
+            retry_count=0,
+        ),
+        TaskMetrics(
+            task_id="task-3",
+            task_name="failed_task",
+            tool_name="mcp:api:call",
+            workflow_id="wf-test-002",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            duration=0.5,
+            status="failed",
+            retry_count=1,
+        ),
+    ]
+    for task_metric in task_metrics:
+        await storage.store_task_metrics(task_metric)
+
+    # 生成 JSON 报告
+    reporter = ReportGenerator(storage)
+    report = await reporter.generate_workflow_report(
+        "wf-test-002", output_format="json"
+    )
+
+    # 解析并验证
+    data = json.loads(report)
+    assert data["workflow_id"] == "wf-test-002"
+    assert data["summary"]["total_tasks"] == 100
+    assert data["summary"]["completed_tasks"] == 95
+    assert data["summary"]["failed_tasks"] == 3
+    assert abs(data["summary"]["success_rate"] - 95.0) < 0.1
+    assert "performance" in data
+    assert data["performance"]["throughput"] == 18.5
+    assert "slow_tasks" in data
+    assert len(data["slow_tasks"]) > 0
+    assert "failed_tasks" in data
+    assert len(data["failed_tasks"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_export_metrics(storage: MetricsStorage) -> None:
+    """测试导出原始指标"""
+    import json
+
+    # 准备测试数据
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-003",
+        total_tasks=50,
+        completed_tasks=48,
+        failed_tasks=2,
+        cancelled_tasks=0,
+        started_at=datetime(2026, 3, 8, 16, 0, 0),
+        completed_at=datetime(2026, 3, 8, 16, 5, 0),
+        total_duration=300.0,
+        throughput=10.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.4,
+        p95_task_duration=1.0,
+        p99_task_duration=1.5,
+        peak_memory_mb=64.0,
+        avg_cpu_percent=30.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+    await storage.store_workflow_metrics(metrics)
+
+    # 添加任务指标
+    task_metric = TaskMetrics(
+        task_id="task-export-1",
+        task_name="test_task",
+        tool_name="test_tool",
+        workflow_id="wf-test-003",
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        duration=0.5,
+        status="completed",
+        retry_count=0,
+    )
+    await storage.store_task_metrics(task_metric)
+
+    # 导出指标
+    reporter = ReportGenerator(storage)
+    export = await reporter.export_metrics("wf-test-003", output_format="json")
+
+    # 解析并验证
+    data = json.loads(export)
+    assert "workflow_metrics" in data
+    assert "task_metrics" in data
+    assert "traces" in data
+    assert data["workflow_metrics"]["workflow_id"] == "wf-test-003"
+    assert data["workflow_metrics"]["total_tasks"] == 50
+    assert len(data["task_metrics"]) >= 1
+    assert data["task_metrics"][0]["task_id"] == "task-export-1"
