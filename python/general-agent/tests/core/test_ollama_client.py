@@ -9,7 +9,7 @@ def ollama_config():
     """Create test Ollama config"""
     return OllamaConfig(
         base_url="http://localhost:11434",
-        model="llama3.2:latest",
+        model="qwen2.5:7b",
         temperature=0.7,
         timeout=30.0
     )
@@ -27,7 +27,7 @@ async def test_ollama_client_creation(ollama_config):
     client = OllamaClient(config=ollama_config)
 
     assert client.config.base_url == "http://localhost:11434"
-    assert client.config.model == "llama3.2:latest"
+    assert client.config.model == "qwen2.5:7b"
     assert client.config.temperature == 0.7
 
 
@@ -182,7 +182,7 @@ async def test_config_defaults():
     config = OllamaConfig()
 
     assert config.base_url == "http://localhost:11434"
-    assert config.model == "llama3.2:latest"
+    assert config.model == "qwen2.5:7b"
     assert config.temperature == 0.7
     assert config.timeout == 30.0
 
@@ -226,7 +226,7 @@ async def test_request_payload_format(ollama_client):
         call_kwargs = mock_post.call_args[1]
         payload = call_kwargs['json']
 
-        assert payload['model'] == "llama3.2:latest"
+        assert payload['model'] == "qwen2.5:7b"
         assert payload['messages'] == messages
         assert payload['stream'] is False
         assert 'options' in payload

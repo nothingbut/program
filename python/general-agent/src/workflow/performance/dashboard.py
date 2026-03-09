@@ -87,7 +87,7 @@ class MonitoringDashboard:
         try:
             # 检查是否已有运行中的事件循环
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # 如果已经在事件循环中，提示用户使用异步版本
                 self.console.print(
                     "[yellow]注意: 请在异步上下文中使用 display_summary_async() 方法[/yellow]"
