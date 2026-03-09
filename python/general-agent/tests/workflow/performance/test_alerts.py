@@ -1,6 +1,7 @@
 """AlertManager 测试"""
 
 import pytest
+from unittest.mock import AsyncMock, Mock
 from datetime import datetime
 from src.workflow.performance.alerts import AlertManager, AlertConfig, Alert
 
@@ -294,3 +295,137 @@ async def test_check_no_alerts() -> None:
     alerts = await manager.check_alerts(metrics)
 
     assert len(alerts) == 0
+
+
+@pytest.mark.asyncio
+async def test_send_notification() -> None:
+    """测试发送通知"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    # 创建 mock notifier
+    mock_notifier = Mock()
+    mock_notifier.send_notification = AsyncMock()
+
+    config = AlertConfig(failure_rate_threshold=0.05)
+    manager = AlertManager(config, notifier=mock_notifier)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-007",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,  # 触发失败率告警
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,
+        p99_task_duration=0.5,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    # 验证通知被调用
+    assert len(alerts) == 1
+    mock_notifier.send_notification.assert_called_once()
+
+    # 验证通知参数
+    call_args = mock_notifier.send_notification.call_args
+    assert "性能告警" in call_args.kwargs["title"]
+    assert "high_failure_rate" in call_args.kwargs["title"]
+    assert "失败率过高" in call_args.kwargs["message"]
+    assert call_args.kwargs["priority"] == "high"
+    assert "terminal" in call_args.kwargs["channels"]
+    assert "desktop" in call_args.kwargs["channels"]
+
+
+@pytest.mark.asyncio
+async def test_no_notification_without_notifier() -> None:
+    """测试没有 notifier 时只记录日志"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    config = AlertConfig(failure_rate_threshold=0.05)
+    manager = AlertManager(config, notifier=None)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-008",
+        total_tasks=100,
+        completed_tasks=90,
+        failed_tasks=10,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=0.5,
+        p99_task_duration=0.5,
+        peak_memory_mb=100.0,
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    # 应该正常工作，只是不发送通知
+    alerts = await manager.check_alerts(metrics)
+    assert len(alerts) == 1
+
+
+@pytest.mark.asyncio
+async def test_notification_priority_mapping() -> None:
+    """测试不同告警类型的优先级映射"""
+    from src.workflow.performance.collector import WorkflowMetrics
+
+    # 创建 mock notifier
+    mock_notifier = Mock()
+    mock_notifier.send_notification = AsyncMock()
+
+    config = AlertConfig(
+        p95_latency_threshold=2.0,
+        memory_threshold_mb=100.0,
+    )
+    manager = AlertManager(config, notifier=mock_notifier)
+
+    metrics = WorkflowMetrics(
+        workflow_id="wf-test-009",
+        total_tasks=100,
+        completed_tasks=100,
+        failed_tasks=0,
+        cancelled_tasks=0,
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        total_duration=100.0,
+        throughput=1.0,
+        avg_task_duration=0.5,
+        p50_task_duration=0.5,
+        p95_task_duration=3.0,  # 触发 P95 告警 (medium)
+        p99_task_duration=4.0,
+        peak_memory_mb=150.0,  # 触发内存告警 (high)
+        avg_cpu_percent=50.0,
+        db_query_count=0,
+        db_total_time=0.0,
+        db_avg_query_time=0.0,
+    )
+
+    alerts = await manager.check_alerts(metrics)
+
+    # 验证两个告警都被触发
+    assert len(alerts) == 2
+    assert mock_notifier.send_notification.call_count == 2
+
+    # 获取所有调用
+    calls = mock_notifier.send_notification.call_args_list
+
+    # 验证优先级映射正确
+    priorities = [call.kwargs["priority"] for call in calls]
+    assert "medium" in priorities  # P95 延迟 -> medium
+    assert "high" in priorities  # 内存 -> high

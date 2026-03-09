@@ -190,8 +190,16 @@ class AlertManager:
             logger.warning(f"Alert: {alert.alert_type} - {alert.message}")
             return
 
-        # Task 7 将实现真正的通知集成
-        pass
+        # 映射告警类型到通知优先级
+        priority = self.config.priority_mapping.get(alert.alert_type, "medium")
+
+        # 发送通知
+        await self.notifier.send_notification(
+            title=f"⚠️ 性能告警: {alert.alert_type}",
+            message=alert.message,
+            priority=priority,
+            channels=["terminal", "desktop"],
+        )
 
     def _should_alert(self, workflow_id: str, alert_type: str) -> bool:
         """去重检查（内部方法）
