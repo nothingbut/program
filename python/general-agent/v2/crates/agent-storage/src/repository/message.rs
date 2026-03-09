@@ -1,12 +1,12 @@
 //! Message Repository SQLite 实现
 
 use agent_core::{
-    models::{Message, MessageMetadata, MessageRole},
+    models::{Message, MessageRole},
     traits::MessageRepository,
     Result as CoreResult,
 };
 use async_trait::async_trait;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, Row};
 use uuid::Uuid;
 
 /// SQLite Message Repository 实现
@@ -31,18 +31,16 @@ impl MessageRepository for SqliteMessageRepository {
             .transpose()
             .map_err(|e| agent_core::Error::Serde(e))?;
 
-        sqlx::query!(
-            r#"
-            INSERT INTO messages (id, session_id, role, content, created_at, metadata)
-            VALUES (?, ?, ?, ?, ?, ?)
-            "#,
-            message.id.to_string(),
-            message.session_id.to_string(),
-            message.role.to_string(),
-            message.content,
-            message.created_at.to_rfc3339(),
-            metadata_json
+        sqlx::query(
+            "INSERT INTO messages (id, session_id, role, content, created_at, metadata)
+             VALUES (?, ?, ?, ?, ?, ?)"
         )
+        .bind(message.id.to_string())
+        .bind(message.session_id.to_string())
+        .bind(message.role.to_string())
+        .bind(message.content.clone())
+        .bind(message.created_at.to_rfc3339())
+        .bind(metadata_json)
         .execute(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -65,18 +63,16 @@ impl MessageRepository for SqliteMessageRepository {
                 .transpose()
                 .map_err(|e| agent_core::Error::Serde(e))?;
 
-            sqlx::query!(
-                r#"
-                INSERT INTO messages (id, session_id, role, content, created_at, metadata)
-                VALUES (?, ?, ?, ?, ?, ?)
-                "#,
-                message.id.to_string(),
-                message.session_id.to_string(),
-                message.role.to_string(),
-                message.content,
-                message.created_at.to_rfc3339(),
-                metadata_json
+            sqlx::query(
+                "INSERT INTO messages (id, session_id, role, content, created_at, metadata)
+                 VALUES (?, ?, ?, ?, ?, ?)"
             )
+            .bind(message.id.to_string())
+            .bind(message.session_id.to_string())
+            .bind(message.role.to_string())
+            .bind(message.content.clone())
+            .bind(message.created_at.to_rfc3339())
+            .bind(metadata_json)
             .execute(&mut *tx)
             .await
             .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -92,49 +88,58 @@ impl MessageRepository for SqliteMessageRepository {
     async fn find_by_id(&self, id: Uuid) -> CoreResult<Option<Message>> {
         let id_str = id.to_string();
 
-        let row = sqlx::query!(
-            r#"
-            SELECT id, session_id, role, content, created_at, metadata
-            FROM messages
-            WHERE id = ?
-            "#,
-            id_str
+        let row = sqlx::query(
+            "SELECT id, session_id, role, content, created_at, metadata
+             FROM messages
+             WHERE id = ?"
         )
+        .bind(id_str)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
 
         match row {
             Some(r) => {
-                let role = match r.role.as_str() {
+                let role_str: String = r.try_get("role")
+                    .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+                let role = match role_str.as_str() {
                     "user" => MessageRole::User,
                     "assistant" => MessageRole::Assistant,
                     "system" => MessageRole::System,
                     _ => {
                         return Err(agent_core::Error::InvalidInput(format!(
                             "Invalid message role: {}",
-                            r.role
+                            role_str
                         )))
                     }
                 };
 
-                let metadata = r
-                    .metadata
+                let metadata_str: Option<String> = r.try_get("metadata")
+                    .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+                let metadata = metadata_str
                     .as_ref()
                     .map(|m| serde_json::from_str(m))
                     .transpose()
                     .map_err(|e| agent_core::Error::Serde(e))?;
 
                 let message = Message {
-                    id: Uuid::parse_str(&r.id)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
-                    session_id: Uuid::parse_str(&r.session_id)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
+                    id: Uuid::parse_str(
+                        &r.try_get::<String, _>("id")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
+                    session_id: Uuid::parse_str(
+                        &r.try_get::<String, _>("session_id")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
                     role,
-                    content: r.content,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
+                    content: r.try_get("content")
+                        .map_err(|e| agent_core::Error::Database(e.to_string()))?,
+                    created_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("created_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
                     metadata,
                 };
 
@@ -152,29 +157,25 @@ impl MessageRepository for SqliteMessageRepository {
         let session_id_str = session_id.to_string();
 
         let rows = if let Some(lim) = limit {
-            sqlx::query!(
-                r#"
-                SELECT id, session_id, role, content, created_at, metadata
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY created_at ASC
-                LIMIT ?
-                "#,
-                session_id_str,
-                lim
+            sqlx::query(
+                "SELECT id, session_id, role, content, created_at, metadata
+                 FROM messages
+                 WHERE session_id = ?
+                 ORDER BY created_at ASC
+                 LIMIT ?"
             )
+            .bind(session_id_str)
+            .bind(lim)
             .fetch_all(&self.pool)
             .await
         } else {
-            sqlx::query!(
-                r#"
-                SELECT id, session_id, role, content, created_at, metadata
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY created_at ASC
-                "#,
-                session_id_str
+            sqlx::query(
+                "SELECT id, session_id, role, content, created_at, metadata
+                 FROM messages
+                 WHERE session_id = ?
+                 ORDER BY created_at ASC"
             )
+            .bind(session_id_str)
             .fetch_all(&self.pool)
             .await
         }
@@ -186,17 +187,15 @@ impl MessageRepository for SqliteMessageRepository {
     async fn get_recent(&self, session_id: Uuid, limit: u32) -> CoreResult<Vec<Message>> {
         let session_id_str = session_id.to_string();
 
-        let rows = sqlx::query!(
-            r#"
-            SELECT id, session_id, role, content, created_at, metadata
-            FROM messages
-            WHERE session_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-            "#,
-            session_id_str,
-            limit
+        let rows = sqlx::query(
+            "SELECT id, session_id, role, content, created_at, metadata
+             FROM messages
+             WHERE session_id = ?
+             ORDER BY created_at DESC
+             LIMIT ?"
         )
+        .bind(session_id_str)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -209,15 +208,11 @@ impl MessageRepository for SqliteMessageRepository {
     async fn delete_by_session(&self, session_id: Uuid) -> CoreResult<()> {
         let session_id_str = session_id.to_string();
 
-        sqlx::query!(
-            r#"
-            DELETE FROM messages WHERE session_id = ?
-            "#,
-            session_id_str
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+        sqlx::query("DELETE FROM messages WHERE session_id = ?")
+            .bind(session_id_str)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| agent_core::Error::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -225,17 +220,15 @@ impl MessageRepository for SqliteMessageRepository {
     async fn count_by_session(&self, session_id: Uuid) -> CoreResult<u64> {
         let session_id_str = session_id.to_string();
 
-        let row = sqlx::query!(
-            r#"
-            SELECT COUNT(*) as count FROM messages WHERE session_id = ?
-            "#,
-            session_id_str
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+        let row = sqlx::query("SELECT COUNT(*) as count FROM messages WHERE session_id = ?")
+            .bind(session_id_str)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| agent_core::Error::Database(e.to_string()))?;
 
-        Ok(row.count as u64)
+        let count: i64 = row.try_get("count")
+            .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+        Ok(count as u64)
     }
 }
 
@@ -243,8 +236,6 @@ impl MessageRepository for SqliteMessageRepository {
 fn parse_messages(
     rows: Vec<sqlx::sqlite::SqliteRow>,
 ) -> CoreResult<Vec<Message>> {
-    use sqlx::Row;
-
     let messages: Result<Vec<Message>, agent_core::Error> = rows
         .into_iter()
         .map(|r| {

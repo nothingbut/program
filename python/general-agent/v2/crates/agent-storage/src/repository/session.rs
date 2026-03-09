@@ -1,12 +1,12 @@
 //! Session Repository SQLite 实现
 
 use agent_core::{
-    models::{Session, SessionContext},
+    models::Session,
     traits::SessionRepository,
     Result as CoreResult,
 };
 use async_trait::async_trait;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, Row};
 use uuid::Uuid;
 
 /// SQLite Session Repository 实现
@@ -27,17 +27,15 @@ impl SessionRepository for SqliteSessionRepository {
         let context_json = serde_json::to_string(&session.context)
             .map_err(|e| agent_core::Error::Serde(e))?;
 
-        sqlx::query!(
-            r#"
-            INSERT INTO sessions (id, title, created_at, updated_at, context)
-            VALUES (?, ?, ?, ?, ?)
-            "#,
-            session.id.to_string(),
-            session.title,
-            session.created_at.to_rfc3339(),
-            session.updated_at.to_rfc3339(),
-            context_json
+        sqlx::query(
+            "INSERT INTO sessions (id, title, created_at, updated_at, context)
+             VALUES (?, ?, ?, ?, ?)"
         )
+        .bind(session.id.to_string())
+        .bind(session.title.clone())
+        .bind(session.created_at.to_rfc3339())
+        .bind(session.updated_at.to_rfc3339())
+        .bind(context_json)
         .execute(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -48,14 +46,12 @@ impl SessionRepository for SqliteSessionRepository {
     async fn find_by_id(&self, id: Uuid) -> CoreResult<Option<Session>> {
         let id_str = id.to_string();
 
-        let row = sqlx::query!(
-            r#"
-            SELECT id, title, created_at, updated_at, context
-            FROM sessions
-            WHERE id = ?
-            "#,
-            id_str
+        let row = sqlx::query(
+            "SELECT id, title, created_at, updated_at, context
+             FROM sessions
+             WHERE id = ?"
         )
+        .bind(id_str)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -63,17 +59,28 @@ impl SessionRepository for SqliteSessionRepository {
         match row {
             Some(r) => {
                 let session = Session {
-                    id: Uuid::parse_str(&r.id)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
-                    title: r.title,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    context: serde_json::from_str(&r.context)
-                        .map_err(|e| agent_core::Error::Serde(e))?,
+                    id: Uuid::parse_str(
+                        &r.try_get::<String, _>("id")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
+                    title: r.try_get("title")
+                        .map_err(|e| agent_core::Error::Database(e.to_string()))?,
+                    created_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("created_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("updated_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    context: serde_json::from_str(
+                        &r.try_get::<String, _>("context")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::Serde(e))?,
                 };
                 Ok(Some(session))
             }
@@ -82,16 +89,14 @@ impl SessionRepository for SqliteSessionRepository {
     }
 
     async fn list(&self, limit: u32, offset: u32) -> CoreResult<Vec<Session>> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT id, title, created_at, updated_at, context
-            FROM sessions
-            ORDER BY updated_at DESC
-            LIMIT ? OFFSET ?
-            "#,
-            limit,
-            offset
+        let rows = sqlx::query(
+            "SELECT id, title, created_at, updated_at, context
+             FROM sessions
+             ORDER BY updated_at DESC
+             LIMIT ? OFFSET ?"
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -100,17 +105,28 @@ impl SessionRepository for SqliteSessionRepository {
             .into_iter()
             .map(|r| {
                 Ok(Session {
-                    id: Uuid::parse_str(&r.id)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
-                    title: r.title,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    context: serde_json::from_str(&r.context)
-                        .map_err(|e| agent_core::Error::Serde(e))?,
+                    id: Uuid::parse_str(
+                        &r.try_get::<String, _>("id")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
+                    title: r.try_get("title")
+                        .map_err(|e| agent_core::Error::Database(e.to_string()))?,
+                    created_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("created_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("updated_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    context: serde_json::from_str(
+                        &r.try_get::<String, _>("context")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::Serde(e))?,
                 })
             })
             .collect();
@@ -122,17 +138,15 @@ impl SessionRepository for SqliteSessionRepository {
         let context_json = serde_json::to_string(&session.context)
             .map_err(|e| agent_core::Error::Serde(e))?;
 
-        let result = sqlx::query!(
-            r#"
-            UPDATE sessions
-            SET title = ?, updated_at = ?, context = ?
-            WHERE id = ?
-            "#,
-            session.title,
-            session.updated_at.to_rfc3339(),
-            context_json,
-            session.id.to_string()
+        let result = sqlx::query(
+            "UPDATE sessions
+             SET title = ?, updated_at = ?, context = ?
+             WHERE id = ?"
         )
+        .bind(session.title.clone())
+        .bind(session.updated_at.to_rfc3339())
+        .bind(context_json)
+        .bind(session.id.to_string())
         .execute(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -147,15 +161,11 @@ impl SessionRepository for SqliteSessionRepository {
     async fn delete(&self, id: Uuid) -> CoreResult<()> {
         let id_str = id.to_string();
 
-        let result = sqlx::query!(
-            r#"
-            DELETE FROM sessions WHERE id = ?
-            "#,
-            id_str
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+        let result = sqlx::query("DELETE FROM sessions WHERE id = ?")
+            .bind(id_str)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| agent_core::Error::Database(e.to_string()))?;
 
         if result.rows_affected() == 0 {
             return Err(agent_core::Error::SessionNotFound(id.to_string()));
@@ -165,28 +175,28 @@ impl SessionRepository for SqliteSessionRepository {
     }
 
     async fn count(&self) -> CoreResult<u64> {
-        let row = sqlx::query!("SELECT COUNT(*) as count FROM sessions")
+        let row = sqlx::query("SELECT COUNT(*) as count FROM sessions")
             .fetch_one(&self.pool)
             .await
             .map_err(|e| agent_core::Error::Database(e.to_string()))?;
 
-        Ok(row.count as u64)
+        let count: i64 = row.try_get("count")
+            .map_err(|e| agent_core::Error::Database(e.to_string()))?;
+        Ok(count as u64)
     }
 
     async fn search(&self, query: &str, limit: u32) -> CoreResult<Vec<Session>> {
         let search_pattern = format!("%{}%", query);
 
-        let rows = sqlx::query!(
-            r#"
-            SELECT id, title, created_at, updated_at, context
-            FROM sessions
-            WHERE title LIKE ?
-            ORDER BY updated_at DESC
-            LIMIT ?
-            "#,
-            search_pattern,
-            limit
+        let rows = sqlx::query(
+            "SELECT id, title, created_at, updated_at, context
+             FROM sessions
+             WHERE title LIKE ?
+             ORDER BY updated_at DESC
+             LIMIT ?"
         )
+        .bind(search_pattern)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| agent_core::Error::Database(e.to_string()))?;
@@ -195,17 +205,28 @@ impl SessionRepository for SqliteSessionRepository {
             .into_iter()
             .map(|r| {
                 Ok(Session {
-                    id: Uuid::parse_str(&r.id)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
-                    title: r.title,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                        .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    context: serde_json::from_str(&r.context)
-                        .map_err(|e| agent_core::Error::Serde(e))?,
+                    id: Uuid::parse_str(
+                        &r.try_get::<String, _>("id")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?,
+                    title: r.try_get("title")
+                        .map_err(|e| agent_core::Error::Database(e.to_string()))?,
+                    created_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("created_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(
+                        &r.try_get::<String, _>("updated_at")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    )
+                    .map_err(|e| agent_core::Error::InvalidInput(e.to_string()))?
+                    .with_timezone(&chrono::Utc),
+                    context: serde_json::from_str(
+                        &r.try_get::<String, _>("context")
+                            .map_err(|e| agent_core::Error::Database(e.to_string()))?
+                    ).map_err(|e| agent_core::Error::Serde(e))?,
                 })
             })
             .collect();

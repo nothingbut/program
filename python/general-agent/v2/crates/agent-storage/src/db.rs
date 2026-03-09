@@ -5,7 +5,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::path::Path;
 use std::str::FromStr;
-use tracing::{info, warn};
+use tracing::info;
 
 /// 数据库连接管理器
 ///
