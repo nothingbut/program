@@ -29,5 +29,5 @@ anyhow = { workspace = true }
 # 日志
 tracing = { workspace = true }
 
-[dev-dependencies]
+# 临时文件（用于示例和测试）
 tempfile = "3.8"
