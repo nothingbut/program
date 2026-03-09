@@ -18,6 +18,8 @@ ENV/
 # Data
 data/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Testing
