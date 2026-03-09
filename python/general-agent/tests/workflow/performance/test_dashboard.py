@@ -97,3 +97,65 @@ def test_display_snapshot_workflow_not_found(monitor):
         assert True
     except Exception as e:
         pytest.fail(f"display_snapshot raised {e}")
+
+
+@pytest.mark.asyncio
+async def test_display_realtime(monitor):
+    """测试实时监控模式"""
+    import asyncio
+
+    # 准备测试数据
+    await monitor.on_workflow_start("wf-test-003", 100)
+
+    dashboard = MonitoringDashboard(monitor)
+
+    # 创建一个任务来停止实时监控
+    async def stop_after_delay():
+        await asyncio.sleep(1)  # 运行 1 秒后停止
+        dashboard._stop_event.set()
+
+    # 启动实时监控和停止任务
+    stop_task = asyncio.create_task(stop_after_delay())
+
+    try:
+        await dashboard.display_realtime("wf-test-003", refresh_interval=0.2)
+        assert True
+    except Exception as e:
+        pytest.fail(f"display_realtime raised {e}")
+    finally:
+        await stop_task
+
+
+@pytest.mark.asyncio
+async def test_display_realtime_workflow_completed(monitor):
+    """测试实时监控模式 - 工作流完成后自动停止"""
+    import asyncio
+
+    # 准备测试数据
+    await monitor.on_workflow_start("wf-test-004", 10)
+
+    # 立即完成工作流
+    result = {"status": "completed"}
+    await monitor.on_workflow_complete("wf-test-004", result)
+
+    dashboard = MonitoringDashboard(monitor)
+
+    # 实时监控应该检测到工作流已完成并自动停止
+    try:
+        await asyncio.wait_for(
+            dashboard.display_realtime("wf-test-004", refresh_interval=0.1), timeout=2.0
+        )
+        assert True
+    except asyncio.TimeoutError:
+        pytest.fail("display_realtime did not stop when workflow completed")
+
+
+def test_build_empty_layout(monitor):
+    """测试构建空布局"""
+    from rich.panel import Panel
+
+    dashboard = MonitoringDashboard(monitor)
+    layout = dashboard._build_empty_layout()
+
+    # 验证返回的是 Panel 对象
+    assert isinstance(layout, Panel)

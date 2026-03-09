@@ -36,7 +36,25 @@ class MonitoringDashboard:
             workflow_id: 工作流 ID
             refresh_interval: 刷新间隔（秒）
         """
-        raise NotImplementedError
+        from rich.live import Live
+
+        self.console.print("[cyan]按 Ctrl+C 停止监控[/cyan]\n")
+        try:
+            with Live(
+                self._build_empty_layout(), console=self.console, refresh_per_second=1
+            ) as live:
+                while not self._stop_event.is_set():
+                    try:
+                        metrics = self.monitor.get_current_metrics(workflow_id)
+                        if metrics:
+                            live.update(self._build_layout(metrics))
+                            if metrics.completed_at is not None:
+                                break
+                        await asyncio.sleep(refresh_interval)
+                    except KeyboardInterrupt:
+                        break
+        finally:
+            self._stop_event.clear()
 
     def display_snapshot(self, workflow_id: str) -> None:
         """快照模式（显示一次）
@@ -181,3 +199,12 @@ class MonitoringDashboard:
         content.append(f"{running}")
 
         return Panel(content, title="任务状态", border_style="blue")
+
+    def _build_empty_layout(self) -> Panel:
+        """构建空布局（初始状态）
+
+        Returns:
+            空布局 Panel
+        """
+        content = Text("正在加载监控数据...", style="yellow")
+        return Panel(content, title="监控面板", border_style="cyan")
