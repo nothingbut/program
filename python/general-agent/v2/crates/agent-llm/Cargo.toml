@@ -1,0 +1,6 @@
+[package]
+name = "agent-llm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

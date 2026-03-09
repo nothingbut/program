@@ -1,0 +1,6 @@
+[package]
+name = "agent-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
