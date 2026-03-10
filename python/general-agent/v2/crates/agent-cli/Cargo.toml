@@ -12,6 +12,7 @@ agent-core = { path = "../agent-core" }
 agent-storage = { path = "../agent-storage" }
 agent-llm = { path = "../agent-llm" }
 agent-workflow = { path = "../agent-workflow" }
+agent-skills = { path = "../agent-skills" }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }

@@ -2,11 +2,13 @@
 
 use agent_core::traits::llm::LLMClient;
 use agent_llm::{AnthropicClient, OllamaClient};
+use agent_skills::{SkillLoader, SkillRegistry};
 use agent_storage::{repository::*, Database};
 use agent_workflow::{ConversationConfig, ConversationFlow, SessionManager};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::*;
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -29,12 +31,16 @@ struct Cli {
     api_key: Option<String>,
 
     /// Ollama 模型名称
-    #[arg(long, env = "OLLAMA_MODEL", default_value = "qwen2.5:0.5b")]
+    #[arg(long, env = "OLLAMA_MODEL", default_value = "qwen3.5:0.8b")]
     ollama_model: String,
 
     /// Ollama 服务地址
     #[arg(long, env = "OLLAMA_BASE_URL", default_value = "http://localhost:11434")]
     ollama_url: String,
+
+    /// 技能文件目录（可选）
+    #[arg(long, value_name = "DIR")]
+    skills_dir: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -76,6 +82,7 @@ enum Commands {
 struct App {
     session_manager: Arc<SessionManager>,
     llm_client: Arc<dyn LLMClient>,
+    skill_registry: Option<Arc<SkillRegistry>>,
 }
 
 impl App {
@@ -112,11 +119,36 @@ impl App {
         if cli.provider == "ollama" {
             println!("{} {}", "  模型:".dimmed(), cli.ollama_model.yellow());
         }
+
+        // 加载技能（如果指定了目录）
+        let skill_registry = if let Some(skills_dir) = &cli.skills_dir {
+            let loader = SkillLoader::new(skills_dir.clone())
+                .context("Failed to create skill loader")?;
+            let skills = loader.load_all()
+                .context("Failed to load skills")?;
+
+            let mut registry = SkillRegistry::new();
+            for skill in &skills {
+                registry.register(skill.clone());
+            }
+
+            println!("{} {} skills from {}",
+                "✓ 加载技能:".green(),
+                skills.len().to_string().cyan(),
+                skills_dir.display().to_string().yellow()
+            );
+
+            Some(Arc::new(registry))
+        } else {
+            None
+        };
+
         println!();
 
         Ok(Self {
             session_manager,
             llm_client,
+            skill_registry,
         })
     }
 
@@ -179,11 +211,16 @@ impl App {
 
         // 创建对话流程
         let config = ConversationConfig::default();
-        let flow = ConversationFlow::new(
+        let mut flow = ConversationFlow::new(
             self.session_manager.clone(),
             self.llm_client.clone(),
             config,
         );
+
+        // 如果启用了技能系统，添加到 flow
+        if let Some(registry) = &self.skill_registry {
+            flow = flow.with_skills(registry.clone());
+        }
 
         // 对话循环
         loop {

@@ -7,6 +7,7 @@ use agent_core::{
     models::{Message, MessageRole},
     traits::llm::{CompletionRequest, CompletionStream, LLMClient},
 };
+use agent_skills::{SkillExecutor, SkillRegistry};
 use std::sync::Arc;
 use tracing::{debug, info};
 use uuid::Uuid;
@@ -82,6 +83,9 @@ pub struct ConversationFlow {
     session_manager: Arc<SessionManager>,
     llm_client: Arc<dyn LLMClient>,
     config: ConversationConfig,
+    // 技能系统组件（可选）
+    skill_registry: Option<Arc<SkillRegistry>>,
+    skill_executor: SkillExecutor,
 }
 
 impl ConversationFlow {
@@ -101,6 +105,8 @@ impl ConversationFlow {
             session_manager,
             llm_client,
             config,
+            skill_registry: None,
+            skill_executor: SkillExecutor::new(),
         }
     }
 
@@ -110,6 +116,49 @@ impl ConversationFlow {
         llm_client: Arc<dyn LLMClient>,
     ) -> Self {
         Self::new(session_manager, llm_client, ConversationConfig::default())
+    }
+
+    /// 启用技能系统
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - 技能注册表
+    pub fn with_skills(mut self, registry: Arc<SkillRegistry>) -> Self {
+        self.skill_registry = Some(registry);
+        self
+    }
+
+    /// 检测是否是技能调用
+    fn is_skill_invocation(&self, content: &str) -> bool {
+        let trimmed = content.trim_start();
+        trimmed.starts_with('@') || trimmed.starts_with('/')
+    }
+
+    /// 处理技能调用
+    async fn handle_skill_invocation(&self, content: &str) -> Result<String> {
+        let registry = self
+            .skill_registry
+            .as_ref()
+            .ok_or_else(|| agent_core::error::Error::Config("Skills not enabled".into()))?;
+
+        // 解析调用
+        let (skill_name, params) = self
+            .skill_executor
+            .parse_invocation(content)
+            .map_err(|e| agent_core::error::Error::InvalidInput(format!("Failed to parse skill: {}", e)))?;
+
+        // 获取技能定义
+        let skill = registry
+            .get(&skill_name)
+            .map_err(|e| agent_core::error::Error::SkillNotFound(format!("{}", e)))?;
+
+        // 执行技能
+        let prompt = self
+            .skill_executor
+            .execute(skill, params)
+            .map_err(|e| agent_core::error::Error::InvalidInput(format!("Failed to execute skill: {}", e)))?;
+
+        Ok(prompt)
     }
 
     /// 发送消息并获取响应
@@ -125,8 +174,16 @@ impl ConversationFlow {
     pub async fn send_message(&self, session_id: Uuid, content: String) -> Result<String> {
         info!("Sending message to session: {}", session_id);
 
-        // 1. 创建用户消息
-        let user_message = Message::new(session_id, MessageRole::User, content);
+        // 检测并处理技能调用
+        let processed_content = if self.is_skill_invocation(&content) {
+            info!("Detected skill invocation: {}", content);
+            self.handle_skill_invocation(&content).await?
+        } else {
+            content
+        };
+
+        // 1. 创建用户消息（使用处理后的内容）
+        let user_message = Message::new(session_id, MessageRole::User, processed_content);
         self.session_manager
             .add_message(session_id, user_message)
             .await?;
@@ -171,8 +228,16 @@ impl ConversationFlow {
     ) -> Result<(Box<dyn CompletionStream>, StreamContext)> {
         info!("Sending streaming message to session: {}", session_id);
 
-        // 1. 创建用户消息
-        let user_message = Message::new(session_id, MessageRole::User, content);
+        // 检测并处理技能调用
+        let processed_content = if self.is_skill_invocation(&content) {
+            info!("Detected skill invocation: {}", content);
+            self.handle_skill_invocation(&content).await?
+        } else {
+            content
+        };
+
+        // 1. 创建用户消息（使用处理后的内容）
+        let user_message = Message::new(session_id, MessageRole::User, processed_content);
         self.session_manager
             .add_message(session_id, user_message)
             .await?;
