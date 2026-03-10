@@ -48,6 +48,35 @@ async fn main() -> Result<()> {
     // 创建 TUI 应用
     let (mut app, backend_rx) = TuiApp::new_with_channel(update_rx)?;
 
+    // 确保至少有一个默认会话
+    let session_manager_clone = session_manager.clone();
+    let update_tx_clone = update_tx.clone();
+    tokio::spawn(async move {
+        // 检查是否已有会话
+        if let Ok(sessions) = session_manager_clone.list_sessions(1, 0).await {
+            if sessions.is_empty() {
+                // 创建默认会话
+                if let Ok(_) = session_manager_clone.create_session(Some("默认会话".to_string())).await {
+                    tracing::info!("创建默认会话");
+                    // 刷新会话列表
+                    if let Ok(sessions) = session_manager_clone.list_sessions(10, 0).await {
+                        let session_infos: Vec<SessionInfo> = sessions
+                            .into_iter()
+                            .map(|s| SessionInfo {
+                                id: s.id,
+                                title: s.title,
+                                updated_at: s.updated_at,
+                            })
+                            .collect();
+                        let _ = update_tx_clone.send(BackendUpdate::SessionsLoaded {
+                            sessions: session_infos,
+                        });
+                    }
+                }
+            }
+        }
+    });
+
     // 启动后台任务
     let backend_task = tokio::spawn(async move {
         run_backend(backend_rx, update_tx, session_manager, conversation_flow).await
