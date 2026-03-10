@@ -174,6 +174,23 @@ impl TuiApp {
                         let _ = self.backend_tx
                             .send(BackendCommand::LoadMessages { session_id });
                     }
+                } else if matches!(self.state.focus, FocusArea::InputBox) {
+                    // 在输入框中按Enter = 发送消息
+                    if let Some(session_id) = self.state.selected_session_id() {
+                        let content = self.state.input.clone();
+                        if !content.is_empty() {
+                            let _ = self.backend_tx.send(BackendCommand::SendMessage {
+                                session_id,
+                                content,
+                            });
+
+                            self.state.clear_input();
+                            self.state.set_session_state(
+                                session_id,
+                                SessionState::WaitingResponse,
+                            );
+                        }
+                    }
                 }
             }
 
@@ -222,7 +239,11 @@ impl TuiApp {
             }
 
             AppEvent::NewSession => {
-                let _ = self.backend_tx.send(BackendCommand::CreateSession { title: None });
+                // 使用时间戳命名新会话
+                let title = format!("会话 {}", chrono::Local::now().format("%m-%d %H:%M"));
+                let _ = self.backend_tx.send(BackendCommand::CreateSession {
+                    title: Some(title)
+                });
             }
 
             AppEvent::DeleteSession => {
