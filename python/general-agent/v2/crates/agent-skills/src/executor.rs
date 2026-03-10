@@ -36,7 +36,9 @@ impl SkillExecutor {
     }
 
     /// 解析技能调用
-    /// 输入: "@greeting user_name='Alice' tone='friendly'"
+    /// 支持两种格式:
+    /// 1. 完整格式: "@greeting user_name='Alice' tone='friendly'"
+    /// 2. 简写格式: "@greeting Alice" (仅当第一个参数是必需参数时)
     /// 输出: (skill_name, parameters)
     pub fn parse_invocation(&self, input: &str) -> Result<(String, HashMap<String, String>)> {
         let input = input.trim();
@@ -59,6 +61,19 @@ impl SkillExecutor {
             }
         }
 
+        // 3. 如果没有找到任何参数，尝试简写格式（提取技能名后的所有内容作为第一个参数值）
+        if parameters.is_empty() {
+            if let Some(caps) = self.skill_pattern.captures(input) {
+                if let Some(matched) = caps.get(0) {
+                    let remaining = input[matched.end()..].trim();
+                    if !remaining.is_empty() {
+                        // 将剩余内容作为未命名参数保存，后续由 execute 方法处理
+                        parameters.insert("__positional_0".to_string(), remaining.to_string());
+                    }
+                }
+            }
+        }
+
         Ok((skill_name, parameters))
     }
 
@@ -66,15 +81,27 @@ impl SkillExecutor {
     pub fn execute(
         &self,
         skill: &SkillDefinition,
-        parameters: HashMap<String, String>,
+        mut parameters: HashMap<String, String>,
     ) -> Result<String> {
-        // 1. 创建执行上下文
+        // 1. 处理位置参数（简写语法）
+        if let Some(value) = parameters.remove("__positional_0") {
+            // 找到第一个必需参数
+            if let Some(first_required_param) = skill.parameters.iter().find(|p| p.required) {
+                parameters.insert(first_required_param.name.clone(), value);
+            } else {
+                return Err(ExecutorError::InvalidSyntax(
+                    "Cannot use positional argument: skill has no required parameters".to_string()
+                ));
+            }
+        }
+
+        // 2. 创建执行上下文
         let context = SkillExecutionContext::new(skill.clone(), parameters);
 
-        // 2. 验证参数
+        // 3. 验证参数
         context.validate().map_err(ExecutorError::ValidationError)?;
 
-        // 3. 构建提示词
+        // 4. 构建提示词
         let prompt = context.build_prompt();
 
         Ok(prompt)
@@ -281,5 +308,47 @@ mod tests {
             result.unwrap_err(),
             ExecutorError::ValidationError(_)
         ));
+    }
+
+    #[test]
+    fn test_parse_invocation_shorthand_syntax() {
+        let executor = SkillExecutor::new();
+        let input = "@greeting Alice";
+
+        let result = executor.parse_invocation(input);
+        assert!(result.is_ok());
+
+        let (skill_name, params) = result.unwrap();
+        assert_eq!(skill_name, "greeting");
+        assert_eq!(params.get("__positional_0"), Some(&"Alice".to_string()));
+    }
+
+    #[test]
+    fn test_execute_skill_shorthand_syntax() {
+        let executor = SkillExecutor::new();
+        let skill = create_test_skill();
+
+        // 解析简写语法
+        let (_, params) = executor.parse_invocation("@greeting Alice").unwrap();
+
+        let result = executor.execute(&skill, params);
+        assert!(result.is_ok());
+
+        let prompt = result.unwrap();
+        assert_eq!(prompt, "Hello Alice! Tone: friendly");
+    }
+
+    #[test]
+    fn test_execute_skill_shorthand_with_spaces() {
+        let executor = SkillExecutor::new();
+        let skill = create_test_skill();
+
+        let (_, params) = executor.parse_invocation("@greeting Alice Smith").unwrap();
+
+        let result = executor.execute(&skill, params);
+        assert!(result.is_ok());
+
+        let prompt = result.unwrap();
+        assert_eq!(prompt, "Hello Alice Smith! Tone: friendly");
     }
 }
