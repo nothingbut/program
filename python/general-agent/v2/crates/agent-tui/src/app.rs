@@ -239,22 +239,30 @@ impl TuiApp {
             }
 
             AppEvent::NewSession => {
-                // 使用时间戳命名新会话
-                let title = format!("会话 {}", chrono::Local::now().format("%m-%d %H:%M"));
-                let _ = self.backend_tx.send(BackendCommand::CreateSession {
-                    title: Some(title)
-                });
+                // 只在会话列表焦点时触发
+                if matches!(self.state.focus, FocusArea::SessionList) {
+                    let title = format!("会话 {}", chrono::Local::now().format("%m-%d %H:%M"));
+                    let _ = self.backend_tx.send(BackendCommand::CreateSession {
+                        title: Some(title)
+                    });
+                }
             }
 
             AppEvent::DeleteSession => {
-                if let Some(session_id) = self.state.selected_session_id() {
-                    let _ = self.backend_tx
-                        .send(BackendCommand::DeleteSession { session_id });
+                // 只在会话列表焦点时触发
+                if matches!(self.state.focus, FocusArea::SessionList) {
+                    if let Some(session_id) = self.state.selected_session_id() {
+                        let _ = self.backend_tx
+                            .send(BackendCommand::DeleteSession { session_id });
+                    }
                 }
             }
 
             AppEvent::Refresh => {
-                let _ = self.backend_tx.send(BackendCommand::LoadSessions);
+                // 只在会话列表焦点时触发
+                if matches!(self.state.focus, FocusArea::SessionList) {
+                    let _ = self.backend_tx.send(BackendCommand::LoadSessions);
+                }
             }
         }
 
