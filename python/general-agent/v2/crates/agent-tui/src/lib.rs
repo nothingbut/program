@@ -9,7 +9,7 @@ pub mod backend;
 pub mod ui;
 
 pub use app::TuiApp;
-pub use state::{AppState, FocusArea};
+pub use state::{AppState, FocusArea, SessionState, SessionItem, MessageItem};
 
 /// TUI 错误类型
 #[derive(Debug, thiserror::Error)]
