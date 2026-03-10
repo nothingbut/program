@@ -59,6 +59,12 @@ pub struct AppState {
 
     /// 错误信息
     pub error: Option<String>,
+
+    /// 流式响应缓冲区
+    streaming_buffer: HashMap<Uuid, String>,
+
+    /// 滚动偏移量
+    pub scroll_offset: HashMap<Uuid, u16>,
 }
 
 impl Default for AppState {
@@ -71,6 +77,8 @@ impl Default for AppState {
             input: String::new(),
             cursor_pos: 0,
             error: None,
+            streaming_buffer: HashMap::new(),
+            scroll_offset: HashMap::new(),
         }
     }
 }
@@ -199,5 +207,51 @@ impl AppState {
         if self.cursor_pos < self.input.len() {
             self.cursor_pos += 1;
         }
+    }
+
+    /// 累积流式响应内容
+    pub fn append_streaming_content(&mut self, session_id: Uuid, content: &str) {
+        self.streaming_buffer
+            .entry(session_id)
+            .or_insert_with(String::new)
+            .push_str(content);
+    }
+
+    /// 完成流式响应，将缓冲区内容添加为消息
+    pub fn finalize_streaming(&mut self, session_id: Uuid) {
+        if let Some(content) = self.streaming_buffer.remove(&session_id) {
+            if !content.is_empty() {
+                self.add_message(
+                    session_id,
+                    MessageItem {
+                        role: "assistant".to_string(),
+                        content,
+                        timestamp: chrono::Utc::now(),
+                    },
+                );
+            }
+        }
+    }
+
+    /// 获取流式缓冲区内容（用于显示）
+    pub fn get_streaming_content(&self, session_id: Uuid) -> Option<&str> {
+        self.streaming_buffer.get(&session_id).map(|s| s.as_str())
+    }
+
+    /// 滚动到底部
+    pub fn scroll_to_bottom(&mut self, session_id: Uuid) {
+        self.scroll_offset.insert(session_id, 0);
+    }
+
+    /// 向上滚动
+    pub fn scroll_up(&mut self, session_id: Uuid) {
+        let offset = self.scroll_offset.entry(session_id).or_insert(0);
+        *offset = offset.saturating_add(1);
+    }
+
+    /// 向下滚动
+    pub fn scroll_down(&mut self, session_id: Uuid) {
+        let offset = self.scroll_offset.entry(session_id).or_insert(0);
+        *offset = offset.saturating_sub(1);
     }
 }

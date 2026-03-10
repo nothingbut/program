@@ -50,23 +50,29 @@ pub fn render_chat_window(f: &mut Frame, area: Rect, state: &AppState) {
             })
             .unwrap_or_default();
 
-        // 检查是否正在生成
-        let generating = matches!(
-            state.get_session_state(session_id),
-            Some(crate::state::SessionState::Streaming)
-        );
-
         let mut all_lines = title_line;
         all_lines.extend(message_lines);
 
-        if generating {
-            all_lines.push(Line::from(""));
-            all_lines.push(Line::from(Span::styled(
-                "[正在生成...]",
-                Style::default()
-                    .fg(AppColors::WARNING)
-                    .add_modifier(Modifier::ITALIC),
-            )));
+        // 显示流式响应内容
+        if let Some(streaming_content) = state.get_streaming_content(session_id) {
+            if !streaming_content.is_empty() {
+                all_lines.push(Line::from(""));
+                all_lines.push(Line::from(vec![
+                    Span::styled(
+                        "assistant: ",
+                        Style::default()
+                            .fg(AppColors::SELECTED)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(streaming_content),
+                ]));
+                all_lines.push(Line::from(Span::styled(
+                    "[生成中...]",
+                    Style::default()
+                        .fg(AppColors::WARNING)
+                        .add_modifier(Modifier::ITALIC),
+                )));
+            }
         }
 
         all_lines
@@ -79,9 +85,17 @@ pub fn render_chat_window(f: &mut Frame, area: Rect, state: &AppState) {
         ))]
     };
 
+    // 获取滚动偏移
+    let scroll_offset = if let Some(session_id) = state.selected_session_id() {
+        state.scroll_offset.get(&session_id).copied().unwrap_or(0)
+    } else {
+        0
+    };
+
     let paragraph = Paragraph::new(lines)
         .block(block)
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_offset, 0));
 
     f.render_widget(paragraph, area);
 }

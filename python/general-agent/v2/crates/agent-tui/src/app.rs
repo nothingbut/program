@@ -286,21 +286,16 @@ impl TuiApp {
             }
 
             BackendUpdate::ParagraphComplete { session_id, paragraph } => {
-                // 添加段落
-                self.state.add_message(
-                    session_id,
-                    MessageItem {
-                        role: "assistant".to_string(),
-                        content: paragraph,
-                        timestamp: chrono::Utc::now(),
-                    },
-                );
-
+                // 累积段落到缓冲区
+                self.state.append_streaming_content(session_id, &paragraph);
                 self.state.set_session_state(session_id, SessionState::Streaming);
             }
 
             BackendUpdate::ResponseComplete { session_id } => {
+                // 完成流式响应，将缓冲区内容保存为一条消息
+                self.state.finalize_streaming(session_id);
                 self.state.set_session_state(session_id, SessionState::Idle);
+                self.state.scroll_to_bottom(session_id);
             }
 
             BackendUpdate::Error { session_id, error } => {

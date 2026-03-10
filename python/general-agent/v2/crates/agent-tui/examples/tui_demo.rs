@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
         .with_base_url("http://localhost:11434".to_string());
     let llm_client: Arc<dyn LLMClient> = Arc::new(OllamaClient::new(config)?);
 
-    // 创建对话流程
+    // 创建对话流程（技能功能已内置在 ConversationFlow 中）
     let conversation_config = ConversationConfig::default();
     let conversation_flow = Arc::new(ConversationFlow::new(
         session_manager.clone(),
