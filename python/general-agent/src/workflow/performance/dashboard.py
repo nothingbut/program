@@ -70,14 +70,13 @@ class MonitoringDashboard:
         layout = self._build_layout(metrics)
         self.console.print(layout)
 
-    def display_summary(self, workflow_id: str) -> None:
+    async def display_summary(self, workflow_id: str) -> None:
         """显示执行摘要
 
         Args:
             workflow_id: 工作流 ID
         """
         from rich.markdown import Markdown
-        import asyncio
         from .reporter import ReportGenerator
 
         # 创建报告生成器
@@ -85,8 +84,8 @@ class MonitoringDashboard:
 
         # 生成 Markdown 报告（异步）
         try:
-            report = asyncio.run(
-                reporter.generate_workflow_report(workflow_id, output_format="markdown")
+            report = await reporter.generate_workflow_report(
+                workflow_id, output_format="markdown"
             )
             # 使用 Rich Markdown 显示
             markdown = Markdown(report)
