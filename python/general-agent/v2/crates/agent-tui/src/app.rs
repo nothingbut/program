@@ -131,7 +131,7 @@ impl TuiApp {
     async fn handle_events(&mut self) -> TuiResult<bool> {
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                if let Some(app_event) = EventHandler::map_key_event(key) {
+                if let Some(app_event) = EventHandler::map_key_event(key, self.state.focus) {
                     self.handle_app_event(app_event)?;
                 }
             }

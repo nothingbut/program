@@ -13,12 +13,14 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 初始化日志
+    // 初始化日志 - 输出到文件避免干扰 TUI 显示
+    let log_file = std::fs::File::create("tui_demo.log")?;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into()),
         )
+        .with_writer(log_file)
         .init();
 
     // 初始化数据库
