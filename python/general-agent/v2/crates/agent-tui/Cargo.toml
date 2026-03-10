@@ -9,6 +9,7 @@ agent-core = { path = "../agent-core" }
 agent-workflow = { path = "../agent-workflow" }
 agent-storage = { path = "../agent-storage" }
 agent-llm = { path = "../agent-llm" }
+agent-skills = { path = "../agent-skills" }
 
 # TUI
 ratatui.workspace = true

@@ -4,11 +4,12 @@
 
 use agent_core::traits::llm::LLMClient;
 use agent_llm::OllamaClient;
+use agent_skills::{SkillLoader, SkillRegistry};
 use agent_storage::{repository::*, Database};
 use agent_tui::{backend::*, TuiApp};
 use agent_workflow::{ConversationConfig, ConversationFlow, SessionManager};
 use anyhow::Result;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc;
 
 #[tokio::main]
@@ -36,13 +37,28 @@ async fn main() -> Result<()> {
         .with_base_url("http://localhost:11434".to_string());
     let llm_client: Arc<dyn LLMClient> = Arc::new(OllamaClient::new(config)?);
 
-    // 创建对话流程（技能功能已内置在 ConversationFlow 中）
+    // 加载技能系统
+    let skills_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../agent-skills/examples/test_skills");
+    let loader = SkillLoader::new(skills_dir)?;
+    let skills = loader.load_all()?;
+
+    let mut registry = SkillRegistry::new();
+    for skill in &skills {
+        registry.register(skill.clone());
+    }
+    println!("✓ 加载了 {} 个技能", skills.len());
+
+    // 创建对话流程（启用技能系统）
     let conversation_config = ConversationConfig::default();
-    let conversation_flow = Arc::new(ConversationFlow::new(
-        session_manager.clone(),
-        llm_client.clone(),
-        conversation_config,
-    ));
+    let conversation_flow = Arc::new(
+        ConversationFlow::new(
+            session_manager.clone(),
+            llm_client.clone(),
+            conversation_config,
+        )
+        .with_skills(Arc::new(registry))
+    );
 
     // 创建通道
     let (update_tx, update_rx) = mpsc::unbounded_channel();
