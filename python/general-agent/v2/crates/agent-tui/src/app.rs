@@ -59,6 +59,31 @@ impl TuiApp {
         Ok((app, backend_cmd_rx))
     }
 
+    /// 使用外部更新通道创建应用
+    pub fn new_with_channel(
+        backend_rx: mpsc::UnboundedReceiver<BackendUpdate>,
+    ) -> TuiResult<(Self, mpsc::UnboundedReceiver<BackendCommand>)> {
+        // 设置终端
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        stdout.execute(EnterAlternateScreen)?;
+        let backend = CrosstermBackend::new(stdout);
+        let terminal = Terminal::new(backend)?;
+
+        // 创建命令通道
+        let (backend_tx, backend_cmd_rx) = mpsc::unbounded_channel();
+
+        let app = Self {
+            state: AppState::new(),
+            terminal,
+            backend_tx,
+            backend_rx,
+            should_quit: false,
+        };
+
+        Ok((app, backend_cmd_rx))
+    }
+
     /// 运行应用
     pub async fn run(&mut self) -> TuiResult<()> {
         // 初始加载会话列表

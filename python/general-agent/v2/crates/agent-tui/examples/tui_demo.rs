@@ -42,12 +42,15 @@ async fn main() -> Result<()> {
         conversation_config,
     ));
 
+    // 创建通道
+    let (update_tx, update_rx) = mpsc::unbounded_channel();
+
     // 创建 TUI 应用
-    let (mut app, mut backend_rx) = TuiApp::new()?;
+    let (mut app, backend_rx) = TuiApp::new_with_channel(update_rx)?;
 
     // 启动后台任务
     let backend_task = tokio::spawn(async move {
-        run_backend(backend_rx, session_manager, conversation_flow).await
+        run_backend(backend_rx, update_tx, session_manager, conversation_flow).await
     });
 
     // 运行应用
@@ -62,6 +65,7 @@ async fn main() -> Result<()> {
 /// 运行后台任务
 async fn run_backend(
     mut cmd_rx: mpsc::UnboundedReceiver<BackendCommand>,
+    update_tx: mpsc::UnboundedSender<BackendUpdate>,
     session_manager: Arc<SessionManager>,
     conversation_flow: Arc<ConversationFlow>,
 ) {
@@ -79,8 +83,9 @@ async fn run_backend(
                         })
                         .collect();
 
-                    // TODO: 发送到 UI
-                    tracing::info!("Loaded {} sessions", session_infos.len());
+                    let _ = update_tx.send(BackendUpdate::SessionsLoaded {
+                        sessions: session_infos,
+                    });
                 }
             }
 
@@ -96,33 +101,97 @@ async fn run_backend(
                         })
                         .collect();
 
-                    // TODO: 发送到 UI
-                    tracing::info!("Loaded {} messages", message_infos.len());
+                    let _ = update_tx.send(BackendUpdate::MessagesLoaded {
+                        session_id,
+                        messages: message_infos,
+                    });
                 }
             }
 
             BackendCommand::SendMessage { session_id, content } => {
-                // 发送消息
-                tracing::info!("Sending message: {}", content);
+                // 克隆以便在异步任务中使用
+                let flow = conversation_flow.clone();
+                let tx = update_tx.clone();
 
-                // TODO: 调用 conversation_flow
-                // TODO: 处理流式响应
-                // TODO: 发送段落到 UI
+                tokio::spawn(async move {
+                    match flow.send_message_stream(session_id, content).await {
+                        Ok((mut stream, _context)) => {
+                            let mut buffer = String::new();
+
+                            while let Ok(Some(chunk)) = stream.next().await {
+                                buffer.push_str(&chunk.delta);
+
+                                // 检测段落边界（双换行或句号+换行）
+                                if buffer.contains("\n\n") || buffer.ends_with("。\n") {
+                                    let paragraph = buffer.clone();
+                                    buffer.clear();
+
+                                    let _ = tx.send(BackendUpdate::ParagraphComplete {
+                                        session_id,
+                                        paragraph,
+                                    });
+                                }
+                            }
+
+                            // 发送剩余内容
+                            if !buffer.is_empty() {
+                                let _ = tx.send(BackendUpdate::ParagraphComplete {
+                                    session_id,
+                                    paragraph: buffer,
+                                });
+                            }
+
+                            let _ = tx.send(BackendUpdate::ResponseComplete { session_id });
+                        }
+                        Err(e) => {
+                            let _ = tx.send(BackendUpdate::Error {
+                                session_id,
+                                error: e.to_string(),
+                            });
+                        }
+                    }
+                });
             }
 
             BackendCommand::CreateSession { title } => {
                 // 创建会话
-                if let Ok(session) = session_manager.create_session(title).await {
-                    tracing::info!("Created session: {}", session.id);
-                    // TODO: 刷新会话列表
+                if let Ok(_session) = session_manager.create_session(title).await {
+                    // 刷新会话列表
+                    if let Ok(sessions) = session_manager.list_sessions(10, 0).await {
+                        let session_infos: Vec<SessionInfo> = sessions
+                            .into_iter()
+                            .map(|s| SessionInfo {
+                                id: s.id,
+                                title: s.title,
+                                updated_at: s.updated_at,
+                            })
+                            .collect();
+
+                        let _ = update_tx.send(BackendUpdate::SessionsLoaded {
+                            sessions: session_infos,
+                        });
+                    }
                 }
             }
 
             BackendCommand::DeleteSession { session_id } => {
                 // 删除会话
                 if let Ok(_) = session_manager.delete_session(session_id).await {
-                    tracing::info!("Deleted session: {}", session_id);
-                    // TODO: 刷新会话列表
+                    // 刷新会话列表
+                    if let Ok(sessions) = session_manager.list_sessions(10, 0).await {
+                        let session_infos: Vec<SessionInfo> = sessions
+                            .into_iter()
+                            .map(|s| SessionInfo {
+                                id: s.id,
+                                title: s.title,
+                                updated_at: s.updated_at,
+                            })
+                            .collect();
+
+                        let _ = update_tx.send(BackendUpdate::SessionsLoaded {
+                            sessions: session_infos,
+                        });
+                    }
                 }
             }
         }
