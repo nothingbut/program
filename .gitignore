@@ -48,3 +48,6 @@ data/sample.json
 target
 Cargo.lock
 python/general-agent/uv.lock
+
+# Worktrees
+.worktrees/
