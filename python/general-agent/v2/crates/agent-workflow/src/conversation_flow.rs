@@ -86,6 +86,14 @@ pub struct ConversationFlow {
     // 技能系统组件（可选）
     skill_registry: Option<Arc<SkillRegistry>>,
     skill_executor: SkillExecutor,
+
+    // MCP 客户端（可选，feature gated）
+    #[cfg(feature = "mcp")]
+    mcp_clients: Option<Arc<Vec<Arc<dyn agent_core::traits::MCPClient>>>>,
+
+    // RAG 检索器（可选，feature gated）
+    #[cfg(feature = "rag")]
+    rag_retriever: Option<Arc<dyn agent_core::traits::RAGRetriever>>,
 }
 
 impl ConversationFlow {
@@ -107,6 +115,10 @@ impl ConversationFlow {
             config,
             skill_registry: None,
             skill_executor: SkillExecutor::new(),
+            #[cfg(feature = "mcp")]
+            mcp_clients: None,
+            #[cfg(feature = "rag")]
+            rag_retriever: None,
         }
     }
 
@@ -125,6 +137,28 @@ impl ConversationFlow {
     /// * `registry` - 技能注册表
     pub fn with_skills(mut self, registry: Arc<SkillRegistry>) -> Self {
         self.skill_registry = Some(registry);
+        self
+    }
+
+    /// 启用 MCP 工具调用
+    ///
+    /// # Arguments
+    ///
+    /// * `clients` - MCP 客户端列表
+    #[cfg(feature = "mcp")]
+    pub fn with_mcp(mut self, clients: Vec<Arc<dyn agent_core::traits::MCPClient>>) -> Self {
+        self.mcp_clients = Some(Arc::new(clients));
+        self
+    }
+
+    /// 启用 RAG 上下文增强
+    ///
+    /// # Arguments
+    ///
+    /// * `retriever` - RAG 检索器
+    #[cfg(feature = "rag")]
+    pub fn with_rag(mut self, retriever: Arc<dyn agent_core::traits::RAGRetriever>) -> Self {
+        self.rag_retriever = Some(retriever);
         self
     }
 
