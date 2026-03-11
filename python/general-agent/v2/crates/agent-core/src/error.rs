@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    #[error("External service error: {0}")]
+    External(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
