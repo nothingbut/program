@@ -2,6 +2,8 @@
 
 pub mod error;
 pub mod loader;
+pub mod chunker;
 
 pub use error::{RAGError, Result};
 pub use loader::{DocumentLoader, MarkdownLoader, TextLoader};
+pub use chunker::{Chunker, ChunkConfig, ChunkStrategy, Chunk};
