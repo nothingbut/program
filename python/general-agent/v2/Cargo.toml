@@ -6,6 +6,7 @@ members = [
     "crates/agent-skills",
     "crates/agent-workflow",
     "crates/agent-mcp",
+    "crates/agent-rag",
     "crates/agent-api",
     "crates/agent-tui",
     "crates/agent-cli",
