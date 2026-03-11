@@ -8,7 +8,7 @@ use crate::{
     embeddings::Embedder,
     loader::DocumentLoader,
     vector_store::VectorStore,
-    Result, RAGError,
+    Result,
 };
 
 /// 默认 RAG 检索器
@@ -55,13 +55,18 @@ impl DefaultRAGRetriever {
         let embeddings = self.embedder.embed_batch(&texts).await?;
 
         // 4. 存储到向量数据库
-        let ids: Vec<String> = all_chunks.iter().map(|c| c.id.clone()).collect();
+        // 使用 UUID 作为向量数据库的 ID，避免文件路径等非 UUID 格式问题
+        let ids: Vec<String> = (0..all_chunks.len())
+            .map(|_| uuid::Uuid::new_v4().to_string())
+            .collect();
+
         let metadatas = all_chunks
             .into_iter()
             .map(|c| {
                 let mut meta = std::collections::HashMap::new();
                 meta.insert("content".to_string(), c.content);
                 meta.insert("doc_id".to_string(), c.doc_id);
+                meta.insert("chunk_id".to_string(), c.id); // 保留原始 chunk ID
                 meta
             })
             .collect();
