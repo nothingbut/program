@@ -1,7 +1,7 @@
 # General Agent V2 架构文档
 
-**版本:** 0.1.0
-**更新日期:** 2026-03-10
+**版本:** 0.2.0
+**更新日期:** 2026-03-11
 
 ---
 
@@ -89,30 +89,34 @@ impl LLMClient for NewLLMProvider {
 ## 分层架构
 
 ```
-┌─────────────────────────────────────────────┐
-│         Presentation Layer (表现层)          │
-│              agent-cli                       │
-│         命令行界面、参数解析                   │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────┴──────────────────────────┐
-│         Application Layer (应用层)           │
-│            agent-workflow                    │
-│    SessionManager + ConversationFlow         │
-│         业务逻辑、流程编排                     │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────┴──────────────────────────┐
-│       Infrastructure Layer (基础设施层)      │
-│   agent-storage + agent-llm + agent-skills   │
-│    数据库、LLM 客户端、技能系统               │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────┴──────────────────────────┐
-│         Domain Layer (领域层)                │
-│              agent-core                      │
-│     领域模型、Traits、错误类型                │
-└─────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│           Presentation Layer (表现层)               │
+│          agent-cli + agent-tui (计划中)            │
+│            命令行界面 / 终端 UI                     │
+└─────────────────────┬──────────────────────────────┘
+                      │
+┌─────────────────────┴──────────────────────────────┐
+│           Application Layer (应用层)                │
+│               agent-workflow                        │
+│       SessionManager + ConversationFlow             │
+│      业务逻辑、流程编排（集成 MCP + RAG）           │
+└──────────┬──────────────┬──────────────┬───────────┘
+           │              │              │
+┌──────────┴──────┬───────┴──────┬───────┴───────────┐
+│  Infrastructure Layer (基础设施层)                  │
+├─────────────────┼──────────────┼─────────────────────┤
+│  agent-storage  │  agent-llm   │  agent-skills       │
+│  SQLite 持久化   │  LLM 客户端   │  技能系统           │
+├─────────────────┼──────────────┼─────────────────────┤
+│   agent-mcp     │  agent-rag   │                     │
+│   MCP 协议/客户端│  RAG 检索器   │                     │
+└─────────────────┴──────────────┴─────────────────────┘
+                      │
+┌─────────────────────┴──────────────────────────────┐
+│             Domain Layer (领域层)                   │
+│                 agent-core                          │
+│     领域模型、Traits、错误类型、业务规则             │
+└────────────────────────────────────────────────────┘
 ```
 
 ### 层次说明
@@ -144,6 +148,19 @@ impl LLMClient for NewLLMProvider {
 - Markdown 解析
 - 技能加载和注册
 - 模板渲染
+
+**agent-mcp:**
+- JSON-RPC 2.0 协议实现
+- Stdio 传输层
+- MCP 服务器连接管理
+- 工具发现和调用
+
+**agent-rag:**
+- 文档加载器（Markdown/PDF/Text）
+- 文本分块器（固定/语义/递归）
+- Embedding 生成（Ollama）
+- 向量存储（Qdrant）
+- 语义检索和重排序
 
 **依赖:** agent-core
 
@@ -615,6 +632,155 @@ impl ConversationFlow {
 
 ---
 
+### agent-mcp
+
+**MCP (Model Context Protocol) 架构:**
+
+```rust
+// Trait 定义
+#[async_trait]
+pub trait MCPClient: Send + Sync {
+    async fn list_tools(&self) -> Result<Vec<ToolDefinition>>;
+    async fn call_tool(&self, name: &str, args: Value) -> Result<Value>;
+}
+
+// JSON-RPC 协议
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,  // "2.0"
+    pub id: String,
+    pub method: String,
+    pub params: Option<Value>,
+}
+
+// Stdio 传输层
+pub struct StdioTransport {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+// MCP 客户端实现
+pub struct DefaultMCPClient {
+    protocol: Arc<JsonRpcProtocol>,
+    transport: Arc<Mutex<StdioTransport>>,
+    config: MCPServerConfig,
+}
+```
+
+**工具调用流程:**
+
+```
+1. ConversationFlow 初始化时连接 MCP 服务器
+   ↓
+2. 列出所有可用工具（list_tools）
+   ↓
+3. 将工具列表传递给 LLM（作为可用工具）
+   ↓
+4. LLM 决定调用工具，返回 tool_use
+   ↓
+5. ConversationFlow 通过 MCP 客户端调用工具
+   ↓
+6. 工具执行结果返回给 LLM
+   ↓
+7. LLM 基于工具结果生成最终响应
+```
+
+**配置示例:**
+
+```rust
+let mcp_config = MCPServerConfig {
+    name: "filesystem".to_string(),
+    command: "mcp-server-filesystem".to_string(),
+    args: vec!["--root".to_string(), "/path/to/files".to_string()],
+    env: HashMap::new(),
+    timeout: Duration::from_secs(30),
+};
+
+let mcp_client = DefaultMCPClient::connect(mcp_config).await?;
+let flow = ConversationFlow::new(session_manager, llm_client, config)
+    .with_mcp(vec![Arc::new(mcp_client)]);
+```
+
+---
+
+### agent-rag
+
+**RAG (Retrieval Augmented Generation) 架构:**
+
+```rust
+// Trait 定义
+#[async_trait]
+pub trait RAGRetriever: Send + Sync {
+    async fn retrieve(&self, query: &str, top_k: usize) -> Result<Vec<Document>>;
+    async fn index_document(&self, doc: Document) -> Result<()>;
+}
+
+// Embedder Trait
+#[async_trait]
+pub trait Embedder: Send + Sync {
+    async fn embed(&self, text: &str) -> Result<Vec<f32>>;
+    async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
+}
+
+// Vector Store Trait
+#[async_trait]
+pub trait VectorStore: Send + Sync {
+    async fn create_collection(&self, name: &str, dimension: usize) -> Result<()>;
+    async fn insert(&self, collection: &str, id: String, vector: Vec<f32>, metadata: HashMap<String, String>) -> Result<()>;
+    async fn search(&self, collection: &str, query: Vec<f32>, top_k: usize) -> Result<Vec<SearchResult>>;
+}
+```
+
+**RAG 流程:**
+
+```
+1. 文档索引（离线）
+   DocumentLoader → Chunker → Embedder → VectorStore
+
+2. 检索（实时）
+   用户查询 → Embedder → VectorStore.search → 相关文档
+
+3. 增强生成
+   相关文档 + 用户查询 → ConversationFlow → LLM → 响应
+```
+
+**实现组件:**
+
+- **DocumentLoader**: 加载各种格式文档（Markdown, PDF, Text）
+- **Chunker**: 智能分块（固定大小、语义、递归）
+- **OllamaEmbedder**: 使用 Ollama 生成 embedding（nomic-embed-text, 768维）
+- **QdrantStore**: Qdrant 向量数据库客户端
+- **DefaultRAGRetriever**: 完整的 RAG 检索器
+
+**使用示例:**
+
+```rust
+// 创建 RAG 检索器
+let embedder = Arc::new(OllamaEmbedder::with_defaults());
+let vector_store = Arc::new(QdrantStore::with_defaults().await?);
+vector_store.create_collection("docs", 768).await?;
+
+let retriever = Arc::new(DefaultRAGRetriever::new(
+    embedder,
+    vector_store,
+    "docs".to_string(),
+));
+
+// 索引文档
+let loader = MarkdownLoader;
+retriever.index_document_with_loader(
+    &loader,
+    "path/to/doc.md",
+    ChunkConfig::default(),
+).await?;
+
+// 使用 RAG 增强的对话
+let flow = ConversationFlow::new(session_manager, llm_client, config)
+    .with_rag(retriever);
+```
+
+---
+
 ## 扩展性
 
 ### 1. 添加新的 LLM 提供商
@@ -684,5 +850,5 @@ General Agent V2 通过：
 
 ---
 
-**更新日期:** 2026-03-10
-**版本:** 0.1.0
+**更新日期:** 2026-03-11
+**版本:** 0.2.0

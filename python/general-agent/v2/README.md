@@ -2,22 +2,27 @@
 
 > 高性能、类型安全的 AI Agent 框架，使用 Rust 构建
 
-**状态:** ✅ Phase 1 完成，可用于生产
-**版本:** 0.1.0
-**更新日期:** 2026-03-10
+**状态:** ✅ Phase 2 Stage 4-5 完成（MCP + RAG 集成）
+**版本:** 0.2.0
+**更新日期:** 2026-03-11
 
 ---
 
 ## ✨ 特性
 
+### 核心功能
 - 🚀 **高性能** - Rust 原生性能，零成本抽象
 - 🔒 **类型安全** - 编译时类型检查，消除运行时错误
 - 🎯 **多 LLM 支持** - Anthropic Claude + Ollama 本地模型
 - 💬 **流式响应** - 实时流式输出，更好的用户体验
-- 🧩 **技能系统** - 可复用的提示词模板，`@skill` 调用语法
 - 💾 **持久化** - SQLite 数据库，完整的会话历史
-- 🧪 **高测试覆盖** - 158 个测试，覆盖率 > 80%
 - 📦 **单一二进制** - 无依赖部署，开箱即用
+
+### 扩展能力
+- 🧩 **技能系统** - 可复用的提示词模板，`@skill` 调用语法
+- 🔌 **MCP 集成** - Model Context Protocol 工具调用支持
+- 📚 **RAG 系统** - 文档检索增强生成（Qdrant + Ollama Embedding）
+- 🧪 **高测试覆盖** - 46 个测试，包括集成测试，覆盖率 > 80%
 
 ---
 
@@ -66,6 +71,46 @@ ollama serve
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-xxx
 ./target/release/agent --provider anthropic chat <session-id>
+```
+
+### 使用 RAG（文档检索增强）
+
+```bash
+# 1. 启动 Qdrant 向量数据库
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+
+# 2. 启动 Ollama（用于 embedding）
+ollama pull nomic-embed-text
+ollama serve
+
+# 3. 索引文档
+./target/release/agent rag index --collection docs ./path/to/documents
+
+# 4. 使用 RAG 增强的对话
+./target/release/agent chat <session-id> --rag --collection docs
+```
+
+### 使用 MCP 工具
+
+```bash
+# 1. 启动 MCP 服务器
+mcp-server-filesystem --root /path/to/files &
+
+# 2. 配置 MCP
+cat > mcp-config.json << EOF
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "command": "mcp-server-filesystem",
+      "args": ["--root", "/path/to/files"]
+    }
+  ]
+}
+EOF
+
+# 3. 使用 MCP 工具
+./target/release/agent chat <session-id> --mcp mcp-config.json
 ```
 
 ---
@@ -132,32 +177,40 @@ agent chat <session-id> --stream
 ### 分层设计
 
 ```
-┌─────────────────────────────────────┐
-│         agent-cli (CLI 工具)         │
-├─────────────────────────────────────┤
-│      agent-workflow (业务层)         │
-│   SessionManager + ConversationFlow  │
-├─────────────────────────────────────┤
-│  agent-llm + agent-storage (基础设施) │
-│    LLM 客户端    SQLite 持久化       │
-├────────────┬────────────────────────┤
-│agent-skills│    agent-core (核心)    │
-│  技能系统   │   模型 + Traits        │
-└────────────┴────────────────────────┘
+┌──────────────────────────────────────────────┐
+│         agent-cli + agent-tui (界面层)        │
+│              CLI 工具 / TUI 界面              │
+├──────────────────────────────────────────────┤
+│           agent-workflow (业务层)             │
+│     SessionManager + ConversationFlow         │
+│         (集成 Skills + MCP + RAG)            │
+├─────────┬──────────┬──────────┬──────────────┤
+│agent-llm│agent-mcp │agent-rag │agent-storage │
+│LLM 客户端│MCP 客户端│RAG 检索器│SQLite 持久化 │
+├─────────┴──────────┴──────────┴──────────────┤
+│   agent-skills  │      agent-core (核心)      │
+│     技能系统     │    模型 + Traits + 错误     │
+└─────────────────┴────────────────────────────┘
 ```
 
 ### Crate 说明
 
-| Crate | 功能 | 测试数 |
-|-------|------|--------|
-| `agent-core` | 核心模型、Traits、错误类型 | 17 |
-| `agent-storage` | SQLite 持久化层 | 22 |
-| `agent-llm` | LLM 客户端（Anthropic + Ollama） | 15 |
-| `agent-skills` | 技能系统（加载、注册、执行） | 60 |
-| `agent-workflow` | 业务逻辑（会话管理、对话流程） | 36 |
-| `agent-cli` | 命令行工具 | 6 |
+| Crate | 功能 | 状态 |
+|-------|------|------|
+| `agent-core` | 核心模型、Traits、错误类型 | ✅ 完成 |
+| `agent-storage` | SQLite 持久化层 | ✅ 完成 |
+| `agent-llm` | LLM 客户端（Anthropic + Ollama） | ✅ 完成 |
+| `agent-skills` | 技能系统（加载、注册、执行） | ✅ 完成 |
+| `agent-workflow` | 业务逻辑（会话管理、对话流程） | ✅ 完成 |
+| `agent-mcp` | MCP 协议和客户端 | ✅ 完成 |
+| `agent-rag` | RAG 检索器（Qdrant + Ollama） | ✅ 完成 |
+| `agent-cli` | 命令行工具 | ✅ 完成 |
+| `agent-tui` | 终端 UI（Ratatui） | ⏳ 计划中 |
 
-**总计:** 156 行代码，158 个测试
+**测试统计:**
+- agent-workflow: 36 个测试（包括 RAG + MCP 集成）
+- agent-rag: 10 个测试（包括 6 个集成测试）
+- 总计: 46 个测试，覆盖率 > 80%
 
 ---
 
@@ -257,20 +310,32 @@ cargo clippy
 
 ## 🗺️ 路线图
 
-### ✅ Phase 1: 基础功能（已完成）
+### ✅ Phase 1: 基础功能（已完成 - 2026-03-10）
 - ✅ 会话管理
 - ✅ LLM 集成（Anthropic + Ollama）
 - ✅ 流式响应
 - ✅ 技能系统
 - ✅ CLI 工具
-- ✅ 集成测试
+- ✅ 单元测试
 
-### 🚧 Phase 2: 用户体验（进行中）
-- ✅ 集成测试（158 个测试）
-- ✅ 文档完善
-- ⏳ TUI 界面（Ratatui）
-- ⏳ MCP 集成
-- ⏳ RAG 系统
+### 🚧 Phase 2: 功能扩展（进行中）
+- ✅ Stage 1: 集成测试（46 个测试）
+- 🔄 Stage 2: 文档完善（进行中）
+- ⏳ Stage 3: TUI 界面（Ratatui）
+- ✅ Stage 4: MCP 集成（已完成 - 2026-03-11）
+  - ✅ JSON-RPC 协议实现
+  - ✅ Stdio 传输层
+  - ✅ MCP 客户端
+  - ✅ ConversationFlow 集成
+  - ✅ 6 个集成测试
+- ✅ Stage 5: RAG 系统（已完成 - 2026-03-11）
+  - ✅ 文档加载器（Markdown）
+  - ✅ 文本分块器
+  - ✅ Ollama Embedding（768维）
+  - ✅ Qdrant 向量存储
+  - ✅ RAG 检索器
+  - ✅ ConversationFlow 集成
+  - ✅ 10 个测试（6 个集成测试）
 
 ### 📅 Phase 3: 生态扩展（计划中）
 - ⏸️ Web API 服务
@@ -310,7 +375,35 @@ chore: 构建/工具相关
 
 ## 📝 更新日志
 
-### v0.1.0 (2026-03-10)
+### v0.2.0 (2026-03-11) - Phase 2 功能扩展
+
+**新增**
+- ✅ MCP（Model Context Protocol）完整实现
+  - JSON-RPC 2.0 协议
+  - Stdio 传输层
+  - 工具发现和调用
+  - ConversationFlow 集成
+- ✅ RAG（检索增强生成）完整实现
+  - Markdown 文档加载
+  - 智能文本分块
+  - Ollama Embedding（nomic-embed-text, 768维）
+  - Qdrant 向量存储
+  - 语义检索
+  - ConversationFlow 集成
+- ✅ 集成测试套件
+  - RAG 集成测试（6个）
+  - MCP 集成测试（6个）
+  - ConversationFlow 扩展测试（10个）
+
+**修复**
+- 🐛 修复 Qdrant UUID 兼容性问题
+- 🐛 修复 Docker 凭证配置问题
+
+**优化**
+- 📚 完整的测试文档
+- 📈 测试覆盖率保持 > 80%
+
+### v0.1.0 (2026-03-10) - Phase 1 基础功能
 
 **新增**
 - ✅ 完整的会话管理系统
@@ -319,7 +412,6 @@ chore: 构建/工具相关
 - ✅ 流式响应（两种 LLM）
 - ✅ 技能系统完整实现
 - ✅ CLI 工具（5 个命令）
-- ✅ 158 个集成测试
 
 **优化**
 - 🚀 默认模型更新为 qwen3.5:0.8b
