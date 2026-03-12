@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小说导入对话框原型 - 立即解析流程</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 bg-opacity-50 flex items-center justify-center min-h-screen p-4">
+  <!-- 对话框容器 -->
+  <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl">
+    <!-- 对话框头部 -->
+    <div class="flex items-center justify-between p-6 border-b border-gray-200">
+      <h2 class="text-2xl font-bold text-gray-800">导入小说</h2>
+      <button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+    </div>
+
+    <!-- 对话框内容 -->
+    <div class="p-6">
+      <!-- Tabs 切换不同步骤 -->
+      <div class="mb-6 flex space-x-2">
+        <button onclick="showStep('select')" class="px-4 py-2 text-sm rounded bg-blue-500 text-white">
+          步骤 1: 选择文件
+        </button>
+        <button onclick="showStep('parsing')" class="px-4 py-2 text-sm rounded hover:bg-gray-100">
+          步骤 2: 解析中
+        </button>
+        <button onclick="showStep('edit')" class="px-4 py-2 text-sm rounded hover:bg-gray-100">
+          步骤 3: 编辑元数据
+        </button>
+      </div>
+
+      <!-- 步骤 1: 选择文件 -->
+      <div id="step-select">
+        <div class="text-center py-12">
+          <div class="inline-block p-6 rounded-full bg-blue-50 mb-4">
+            <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">选择 TXT 文件</h3>
+          <p class="text-gray-500 mb-6">支持 UTF-8 和 GBK 编码</p>
+          <button class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">
+            📂 选择文件
+          </button>
+        </div>
+      </div>
+
+      <!-- 步骤 2: 解析中 -->
+      <div id="step-parsing" class="hidden">
+        <div class="text-center py-12">
+          <div class="inline-block mb-4">
+            <!-- 加载动画 -->
+            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500"></div>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">正在解析文件...</h3>
+          <p class="text-gray-500 mb-2">正在识别编码和分割章节</p>
+          <p class="text-sm text-gray-400">这可能需要几秒钟</p>
+        </div>
+      </div>
+
+      <!-- 步骤 3: 编辑元数据 -->
+      <div id="step-edit" class="hidden">
+        <!-- 统计信息 -->
+        <div class="bg-blue-50 rounded-lg p-4 mb-6 flex justify-around">
+          <div class="text-center">
+            <div class="text-3xl font-bold text-blue-600">123</div>
+            <div class="text-sm text-gray-600">章节数</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold text-blue-600">423,156</div>
+            <div class="text-sm text-gray-600">总字数</div>
+          </div>
+        </div>
+
+        <!-- 表单 -->
+        <form class="space-y-4">
+          <!-- 标题 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              书名 <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value="三体.txt"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="请输入书名"
+            />
+            <p class="text-xs text-gray-500 mt-1">💡 已从文件名自动提取</p>
+          </div>
+
+          <!-- 作者 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">作者</label>
+            <input
+              type="text"
+              value="刘慈欣"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="可选"
+            />
+            <p class="text-xs text-gray-500 mt-1">✨ 已从文件内容自动提取</p>
+          </div>
+
+          <!-- 简介 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">简介</label>
+            <textarea
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="可选"
+            >文化大革命如火如荼进行的同时，军方探寻外星文明的绝秘计划"红岸工程"取得了突破性进展...</textarea>
+            <p class="text-xs text-gray-500 mt-1">✨ 已从文件内容自动提取</p>
+          </div>
+
+          <!-- 分类 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                主分类 <span class="text-red-500">*</span>
+              </label>
+              <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">请选择</option>
+                <option value="科幻" selected>科幻</option>
+                <option value="历史">历史</option>
+                <option value="玄幻">玄幻</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">子分类</label>
+              <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">请选择</option>
+                <option value="太空歌剧" selected>太空歌剧</option>
+                <option value="末世幻想">末世幻想</option>
+                <option value="硬科幻">硬科幻</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 章节预览 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">章节预览（前 3 章）</label>
+            <div class="border border-gray-200 rounded-lg divide-y divide-gray-200">
+              <div class="p-3 hover:bg-gray-50">
+                <div class="flex items-start justify-between mb-1">
+                  <span class="font-medium">01. 第一章 科学边界</span>
+                  <span class="text-sm text-gray-500">12,458 字</span>
+                </div>
+                <p class="text-sm text-gray-600 truncate">
+                  汪淼开车驶过北京的午夜街道，去参加一个奇怪的会议...
+                </p>
+              </div>
+              <div class="p-3 hover:bg-gray-50">
+                <div class="flex items-start justify-between mb-1">
+                  <span class="font-medium">02. 第二章 台球</span>
+                  <span class="text-sm text-gray-500">9,234 字</span>
+                </div>
+                <p class="text-sm text-gray-600 truncate">
+                  汪淼不再理会倒计时，专心进行纳米材料实验...
+                </p>
+              </div>
+              <div class="p-3 hover:bg-gray-50">
+                <div class="flex items-start justify-between mb-1">
+                  <span class="font-medium">03. 第三章 射手和农场主</span>
+                  <span class="text-sm text-gray-500">11,890 字</span>
+                </div>
+                <p class="text-sm text-gray-600 truncate">
+                  汪淼从家里出发前往位于密云水库附近的射电天文观测基地...
+                </p>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+              ℹ️ 完整文件包含 123 个章节，总计 423,156 字
+            </p>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 对话框底部操作栏 -->
+    <div class="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+      <button class="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg">
+        取消
+      </button>
+      <button class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">
+        开始导入
+      </button>
+    </div>
+  </div>
+
+  <script>
+    function showStep(step) {
+      // Hide all steps
+      document.getElementById('step-select').classList.add('hidden');
+      document.getElementById('step-parsing').classList.add('hidden');
+      document.getElementById('step-edit').classList.add('hidden');
+
+      // Show selected step
+      if (step === 'select') {
+        document.getElementById('step-select').classList.remove('hidden');
+      } else if (step === 'parsing') {
+        document.getElementById('step-parsing').classList.remove('hidden');
+        // Auto advance to edit after 2 seconds
+        setTimeout(() => showStep('edit'), 2000);
+      } else if (step === 'edit') {
+        document.getElementById('step-edit').classList.remove('hidden');
+      }
+    }
+
+    // Simulate the import flow
+    document.addEventListener('DOMContentLoaded', () => {
+      // Start with select step
+      showStep('select');
+    });
+  </script>
+
+  <!-- 原型元信息 -->
+  <div class="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-3 text-xs text-gray-600 max-w-xs">
+    <strong class="block mb-1">📋 原型信息</strong>
+    <div class="space-y-1">
+      <div><strong>创建日期:</strong> 2026-03-12（回溯创建）</div>
+      <div><strong>状态:</strong> ✅ 基于已实施的设计</div>
+      <div><strong>版本:</strong> v2 (立即解析流程)</div>
+      <div><strong>关联:</strong> ADR-005, commit 98eb206</div>
+      <div class="mt-2 pt-2 border-t border-gray-200">
+        <strong>流程说明:</strong><br>
+        1. 选择文件<br>
+        2. 自动解析（显示加载状态）<br>
+        3. 编辑元数据（自动提取作者/简介）<br>
+        <span class="text-red-600">已废弃流程:</span> 选择 → 填写 → 点击预览 → 确认
+      </div>
+    </div>
+  </div>
+</body>
+</html>
