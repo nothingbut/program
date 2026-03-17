@@ -47,3 +47,8 @@ data/sample.json
 
 target
 Cargo.lock
+
+# Claude Code
+.claude.json
+.worktrees/
+claude/
